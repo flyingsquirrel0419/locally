@@ -14,8 +14,12 @@ struct ChatView: View {
                 // Registry id is "\(repoID)@\(revision)"; the analyzer stores
                 // the revision in descriptor.metadata at install time.
                 let id = "\(model.repoID)@\(model.metadata["revision"] ?? "main")"
-                Task { try? await ModelLibraryRuntime.shared.holder.registry?
-                    .recordBenchmark(id: id, sample: metadata) }
+                // ModelLibraryRuntime.shared is MainActor state; hop there
+                // first, then call into the registry actor.
+                Task { @MainActor in
+                    let registry = ModelLibraryRuntime.shared.holder.registry
+                    try? await registry?.recordBenchmark(id: id, sample: metadata)
+                }
             }))
     }
 

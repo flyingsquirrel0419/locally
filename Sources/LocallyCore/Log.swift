@@ -41,7 +41,10 @@ public enum Log {
 
     public static func debug(_ category: Category, _ message: @autoclosure () -> String) {
         #if canImport(os)
-        logger(for: category).debug("\(message(), privacy: .public)")
+        // Evaluate eagerly: os.Logger's message autoclosure is escaping and
+        // cannot capture our non-escaping parameter.
+        let text = message()
+        logger(for: category).debug("\(text, privacy: .public)")
         #else
         FileHandle.standardError.write(Data("[\(category.rawValue)] \(message())\n".utf8))
         #endif
@@ -49,7 +52,8 @@ public enum Log {
 
     public static func info(_ category: Category, _ message: @autoclosure () -> String) {
         #if canImport(os)
-        logger(for: category).info("\(message(), privacy: .public)")
+        let text = message()
+        logger(for: category).info("\(text, privacy: .public)")
         #else
         FileHandle.standardError.write(Data("[\(category.rawValue)] \(message())\n".utf8))
         #endif
@@ -57,7 +61,8 @@ public enum Log {
 
     public static func warning(_ category: Category, _ message: @autoclosure () -> String) {
         #if canImport(os)
-        logger(for: category).warning("\(message(), privacy: .public)")
+        let text = message()
+        logger(for: category).warning("\(text, privacy: .public)")
         #else
         FileHandle.standardError.write(Data("[\(category.rawValue)][warn] \(message())\n".utf8))
         #endif
@@ -65,7 +70,8 @@ public enum Log {
 
     public static func error(_ category: Category, _ message: @autoclosure () -> String) {
         #if canImport(os)
-        logger(for: category).error("\(message(), privacy: .public)")
+        let text = message()
+        logger(for: category).error("\(text, privacy: .public)")
         #else
         FileHandle.standardError.write(Data("[\(category.rawValue)][error] \(message())\n".utf8))
         #endif
