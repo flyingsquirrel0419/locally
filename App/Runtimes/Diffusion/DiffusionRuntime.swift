@@ -211,7 +211,6 @@ public final class DiffusionRuntime: ModelCompatibleRuntime, @unchecked Sendable
                     continuation.finish()
                     return
                 }
-                let pipeline = box.value
 
                 continuation.yield(.preparing("Loading model"))
                 let started = Date()
@@ -225,9 +224,11 @@ public final class DiffusionRuntime: ModelCompatibleRuntime, @unchecked Sendable
                     configuration.schedulerType = .dpmSolverMultistepScheduler
 
                     let images: [CGImage?] = try await withCheckedThrowingContinuation { probe in
-                        Task.detached(priority: .userInitiated) {
+                        // Capture `box` (Sendable) rather than the non-Sendable
+                        // pipeline protocol; dereference inside the detached task.
+                        Task.detached(priority: .userInitiated) { [box, configuration, state] in
                             do {
-                                let result = try pipeline.generateImages(
+                                let result = try box.value.generateImages(
                                     configuration: configuration
                                 ) { progress -> Bool in
                                     let done = progress.step + 1

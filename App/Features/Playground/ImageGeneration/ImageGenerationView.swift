@@ -213,7 +213,7 @@ struct ImageGenerationView: View {
             return
         }
         do {
-            try await PHPhotoLibrary.shared().performChanges {
+            try await PHPhotoLibrary.shared().performChanges { @Sendable in
                 let request = PHAssetCreationRequest.forAsset()
                 request.addResource(with: .photo, data: data, options: nil)
             }

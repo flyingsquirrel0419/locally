@@ -403,8 +403,9 @@ actor LlamaBridge {
     /// Approximate process resident memory in bytes. llama.cpp does not
     /// expose a per-model memory counter through the C API, so this samples
     /// process-level RSS (Linux /proc/self/statm) or physical footprint
-    /// (Apple task_info). Approximate: it covers the whole process, not just
-    /// this model.
+    /// (Apple task_info with TASK_VM_INFO). Approximate: it covers the whole
+    /// process, not just this model. phys_footprint is the metric jetsam
+    /// uses to decide termination, so it is the most relevant reading.
     func residentMemoryBytes() -> Int64? {
         #if os(Linux)
         guard let text = try? String(contentsOfFile: "/proc/self/statm", encoding: .ascii) else {
@@ -414,15 +415,16 @@ actor LlamaBridge {
         guard fields.count >= 2, let residentPages = Int64(fields[1]) else { return nil }
         return residentPages &* Int64(sysconf(Int32(_SC_PAGESIZE)))
         #elseif canImport(Darwin)
-        var info = mach_vm_basic_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_vm_basic_info_data_t>.stride / MemoryLayout<integer_t>.stride)
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
         let kr: kern_return_t = withUnsafeMutablePointer(to: &info) { ptr in
             ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
-                task_info(mach_task_self_, task_flavor_t(MACH_VM_BASIC_INFO), intPtr, &count)
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), intPtr, &count)
             }
         }
         guard kr == KERN_SUCCESS else { return nil }
-        return Int64(info.resident_size)
+        return Int64(info.phys_footprint)
         #else
         return nil
         #endif
