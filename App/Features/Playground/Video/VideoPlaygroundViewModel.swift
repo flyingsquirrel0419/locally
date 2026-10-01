@@ -77,7 +77,7 @@ final class VideoPlaygroundViewModel {
         } catch let error as LocallyError {
             lastError = error.userMessage
         } catch {
-            lastError = error.localizedDescription
+            lastError = ErrorPresentation.userMessage(for: error)
         }
     }
 
@@ -98,7 +98,7 @@ final class VideoPlaygroundViewModel {
             lastError = nil
             planReason = nil
         } catch {
-            lastError = error.localizedDescription
+            lastError = ErrorPresentation.userMessage(for: error)
         }
     }
 
@@ -110,7 +110,9 @@ final class VideoPlaygroundViewModel {
         progress = 0
         progressPhase = nil
 
-        let pipeline = VideoUnderstandingPipeline(probe: .system)
+        // The policy-aware probe folds ResourcePolicyObserver's frame-budget
+        // scale (thermal/low-power pressure) into the planner's live state.
+        let pipeline = VideoUnderstandingPipeline(probe: .policyAware())
         let budget = Int64(min(device.physicalMemory / 4, 1_000_000_000))
         let requested = frameBudget.count
         let mode = self.mode
@@ -152,7 +154,7 @@ final class VideoPlaygroundViewModel {
                     }
                 }
             } catch {
-                lastError = error.localizedDescription
+                lastError = ErrorPresentation.userMessage(for: error)
             }
         }
     }

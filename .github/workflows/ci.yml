@@ -34,6 +34,12 @@ jobs:
         run: swift test -j 2
         env:
           LOCALLY_LLAMA: "1"
+      - name: Localization coverage
+        run: python3 scripts/check-localization.py
+      - name: Parse-check app and vendored sources
+        run: |
+          find App Vendor -name '*.swift' -type f -print0 \
+            | xargs -0 -n1 -P2 swiftc -parse
 
   macos:
     runs-on: macos-15

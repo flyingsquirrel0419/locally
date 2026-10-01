@@ -87,7 +87,7 @@ final class DecisionPlaygroundViewModel {
         } catch let error as LocallyError {
             lastError = error.userMessage
         } catch {
-            lastError = error.localizedDescription
+            lastError = ErrorPresentation.userMessage(for: error)
         }
     }
 
@@ -141,7 +141,7 @@ final class DecisionPlaygroundViewModel {
                 schemaError = error.description
                 return nil
             } catch {
-                schemaError = error.localizedDescription
+                schemaError = ErrorPresentation.userMessage(for: error)
                 return nil
             }
         }
@@ -173,7 +173,7 @@ final class DecisionPlaygroundViewModel {
             schemaError = error.description
             return nil
         } catch {
-            schemaError = error.localizedDescription
+            schemaError = ErrorPresentation.userMessage(for: error)
             return nil
         }
     }
@@ -227,7 +227,7 @@ final class DecisionPlaygroundViewModel {
                     }
                 }
             } catch {
-                if !Task.isCancelled { self.lastError = error.localizedDescription }
+                if !Task.isCancelled { self.lastError = ErrorPresentation.userMessage(for: error) }
             }
             self.runTask = nil
         }

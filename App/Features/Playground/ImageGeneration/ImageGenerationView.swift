@@ -215,7 +215,7 @@ struct ImageGenerationView: View {
             }
             savedNotice = true
         } catch {
-            saveError = error.localizedDescription
+            saveError = ErrorPresentation.userMessage(for: error)
         }
     }
 }

@@ -234,6 +234,18 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Version" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "버전" } }
       }
+    },
+    "error.cancelled" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The operation was cancelled." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "작업이 취소되었습니다." } }
+      }
+    },
+    "error.generic" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Something went wrong. Please try again." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "문제가 발생했습니다. 다시 시도해 주세요." } }
+      }
     }
   },
   "version" : "1.0"

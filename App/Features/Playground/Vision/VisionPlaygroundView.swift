@@ -105,6 +105,7 @@ struct VisionPlaygroundView: View {
                     .foregroundStyle(DS.Color.secondaryLabel)
                     .background(Circle().fill(DS.Color.background))
             }
+            .accessibilityLabel(String(localized: "vision.images.remove", table: "Vision"))
             .offset(x: 6, y: -6)
             .accessibilityLabel(String(localized: "vision.images.remove", table: "Vision"))
         }
@@ -181,6 +182,7 @@ struct VisionPlaygroundView: View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(DS.Color.warning)
+                .accessibilityHidden(true)
             Text(message)
                 .font(DS.Typography.caption)
                 .foregroundStyle(DS.Color.label)

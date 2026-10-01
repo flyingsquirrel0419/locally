@@ -75,13 +75,18 @@ final class ChatViewModel {
         } catch let error as LocallyError {
             lastError = error.userMessage
         } catch {
-            lastError = error.localizedDescription
+            lastError = ErrorPresentation.userMessage(for: error)
         }
     }
 
     func send() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isGenerating, let runtime else { return }
+        let gate = ResourcePolicyObserver.shared.gateHeavyInference()
+        guard gate.allowed else {
+            lastError = gate.reason
+            return
+        }
         input = ""
         lastError = nil
         messages.append(Message(role: .user, content: text))
@@ -112,6 +117,7 @@ final class ChatViewModel {
             )
         )
 
+        ResourcePolicyObserver.shared.setActivity(.textGeneration)
         generationTask = Task { [weak self] in
             guard let self else { return }
             let stream = runtime.run(request)
@@ -122,7 +128,7 @@ final class ChatViewModel {
                 }
             } catch {
                 if !Task.isCancelled {
-                    self.failStreaming(with: error.localizedDescription)
+                    self.failStreaming(with: ErrorPresentation.userMessage(for: error))
                 }
             }
             self.finishGeneration()
@@ -131,6 +137,15 @@ final class ChatViewModel {
 
     func stop() {
         generationTask?.cancel()
+    }
+
+    /// App-wide resource policy entry point: cancel the active generation
+    /// and surface the reason. Called by ResourcePolicyObserver via the
+    /// registry's handler when memory/thermal pressure demands a stop.
+    func stopForResourcePolicy(reason: String) {
+        guard isGenerating else { return }
+        generationTask?.cancel()
+        failStreaming(with: reason)
     }
 
     func clearConversation() {
@@ -188,6 +203,7 @@ final class ChatViewModel {
     private func finishGeneration() {
         generationTask = nil
         streamingMessageID = nil
+        ResourcePolicyObserver.shared.setActivity(.idle)
     }
 
     // Metrics formatting for the footer.
