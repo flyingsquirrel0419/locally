@@ -63,10 +63,23 @@ public struct RepositoryAnalyzer: Sendable {
             }
         }
 
+        // GGUF repos carry no config.json; the GGUF header itself is the
+        // ground truth for architecture, parameter count, context length,
+        // and the chat template. Range-fetch the chosen variant's header
+        // (8 MB cap; one growth to 32 MB for very chat-template-heavy files).
+        let ggufVariant = pickGGUFVariant(siblings: siblings)
+        var ggufHeader: GGUFParser.Header?
+        if let variant = ggufVariant {
+            ggufHeader = await Self.fetchGGUFHeader(
+                repoID: reference.repoID, revision: revision,
+                path: variant.rfilename, client: client)
+        }
+
         return buildDescriptor(
             reference: reference, revision: revision, info: info,
             siblings: siblings, configs: configs,
-            frontMatter: readmeFrontMatter, safetensorsHeader: safetensorsHeader
+            frontMatter: readmeFrontMatter, safetensorsHeader: safetensorsHeader,
+            ggufHeader: ggufHeader, ggufVariant: ggufVariant
         )
     }
 
@@ -79,7 +92,8 @@ public struct RepositoryAnalyzer: Sendable {
         buildDescriptor(
             reference: reference, revision: reference.revision ?? info.sha ?? "main",
             info: info, siblings: info.siblings ?? [], configs: configs,
-            frontMatter: frontMatter, safetensorsHeader: safetensorsHeader
+            frontMatter: frontMatter, safetensorsHeader: safetensorsHeader,
+            ggufHeader: nil, ggufVariant: nil
         )
     }
 
@@ -88,7 +102,8 @@ public struct RepositoryAnalyzer: Sendable {
     private func buildDescriptor(
         reference: HFRepoReference, revision: String, info: HFRepoInfo,
         siblings: [HFSibling], configs: [String: ModelConfig],
-        frontMatter: CardFrontMatter?, safetensorsHeader: ModelHeaderParser.SafetensorsHeader?
+        frontMatter: CardFrontMatter?, safetensorsHeader: ModelHeaderParser.SafetensorsHeader?,
+        ggufHeader: GGUFParser.Header?, ggufVariant: HFSibling?
     ) -> ModelDescriptor {
         let config = configs["config.json"]
         let tags = Set((info.tags ?? []) + (frontMatter?.tags ?? []))
@@ -98,18 +113,22 @@ public struct RepositoryAnalyzer: Sendable {
         let modality = detectModality(pipelineTag: pipelineTag, config: config,
                                       modelIndex: configs["model_index.json"],
                                       tags: tags, architectures: architectures(from: config))
-        let ggufVariant = pickGGUFVariant(siblings: siblings)
+        let ggufVariant = ggufVariant ?? pickGGUFVariant(siblings: siblings)
+        let ggufSummary = ggufHeader.map { GGUFModelSummary(header: $0) }
         let formats = detectFormats(siblings: siblings, libraryName: libraryName,
                                     config: config, tags: tags, repoOwner: reference.repoID.owner)
         let quantization = detectQuantization(config: config, tags: tags,
                                               ggufVariant: ggufVariant,
                                               repoName: reference.repoID.name)
         let parameters = safetensorsHeader?.parameterCount
+            ?? (ggufSummary.map { $0.parameterCount }?.nilIfZero)
             ?? estimateParametersFromConfig(config)
             ?? estimateParametersFromName(reference.repoID.name)
         let context = config?.maxPositionEmbeddings
             ?? configs["generation_config.json"]?.maxPositionEmbeddings
+            ?? ggufSummary?.contextLength
         let hints = architectureHints(from: config)
+            ?? ggufHeader.map { ArchitectureHints(ggufMetadata: Self.ggufMetadataDictionary($0)) }
 
         let required = selectRequiredFiles(siblings: siblings, ggufVariant: ggufVariant,
                                            formats: formats)
@@ -131,6 +150,15 @@ public struct RepositoryAnalyzer: Sendable {
                 .map { "\($0.key):\($0.value)" }
                 .joined(separator: ",")
         }
+        if let summary = ggufSummary {
+            // Ground truth from the GGUF header itself: quantization scheme
+            // from file_type, chat-template presence for the prompt builder.
+            if let scheme = summary.quantization?.scheme, metadata["quantization"] == nil {
+                metadata["quantization"] = scheme
+            }
+            if summary.chatTemplate != nil { metadata["chat_template"] = "gguf" }
+            if let arch = summary.architecture { metadata["gguf_architecture"] = arch }
+        }
 
         return ModelDescriptor(
             repoID: reference.repoID.description,
@@ -150,6 +178,66 @@ public struct RepositoryAnalyzer: Sendable {
             architectureHints: hints,
             metadata: metadata
         )
+    }
+
+    // MARK: - GGUF header fetch
+
+    /// Range-fetch the GGUF header for `path` and parse it. The header is
+    /// metadata + tensor infos only, so 8 MB covers essentially every real
+    /// model; if a parse comes back truncated (an enormous chat template or
+    /// tokenizer list can push past 8 MB) one retry at 32 MB is allowed.
+    /// Returns nil when the file doesn't parse — analysis then falls back
+    /// to name/config heuristics exactly as before.
+    static func fetchGGUFHeader(repoID: RepoID, revision: String, path: String,
+                                client: HFClient) async -> GGUFParser.Header? {
+        let initial: Int64 = 8 * 1024 * 1024
+        let grown: Int64 = 32 * 1024 * 1024
+        for cap in [initial, grown] {
+            guard let data = try? await client.fetchRange(
+                repoID, revision: revision, path: path, length: cap
+            ) else { return nil }
+            do {
+                return try GGUFParser().parse(data)
+            } catch GGUFParser.ParseError.truncated where cap == initial {
+                continue  // grow once and retry
+            } catch {
+                return nil
+            }
+        }
+        return nil
+    }
+
+    /// Flatten a parsed GGUF header into the `[String: Any]` shape
+    /// `ArchitectureHints(ggufMetadata:)` expects: arch-prefixed numeric
+    /// keys plus the tokenizer list used for the vocab-size fallback.
+    static func ggufMetadataDictionary(_ header: GGUFParser.Header) -> [String: Any] {
+        var out: [String: Any] = [:]
+        for (key, value) in header.metadata {
+            switch value {
+            case .uint8(let v): out[key] = Int(v)
+            case .int8(let v): out[key] = Int(v)
+            case .uint16(let v): out[key] = Int(v)
+            case .int16(let v): out[key] = Int(v)
+            case .uint32(let v): out[key] = Int(v)
+            case .int32(let v): out[key] = Int(v)
+            case .uint64(let v): out[key] = Int(clamping: v)
+            case .int64(let v): out[key] = Int(clamping: v)
+            case .float32(let v): out[key] = Double(v)
+            case .float64(let v): out[key] = v
+            case .bool(let v): out[key] = v
+            case .string(let v): out[key] = v
+            case .array(let elements):
+                // Only the tokenizer token list is consumed (for its count),
+                // and only as strings; other arrays are ignored.
+                if key == "tokenizer.ggml.tokens" {
+                    out[key] = elements.compactMap { value -> String? in
+                        if case .string(let s) = value { return s }
+                        return nil
+                    }
+                }
+            }
+        }
+        return out
     }
 
     // MARK: - Modality
@@ -471,4 +559,9 @@ public struct RepositoryAnalyzer: Sendable {
             return []
         }
     }
+}
+
+private extension Int64 {
+    /// Parameter counts of zero are useless — treat as missing.
+    var nilIfZero: Int64? { self == 0 ? nil : self }
 }

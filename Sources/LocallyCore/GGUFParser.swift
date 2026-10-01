@@ -1,5 +1,4 @@
 import Foundation
-import LocallyCore
 
 /// Pure-Swift parser for the GGUF container header (spec version 2 and 3).
 /// Reads from `Data` or a `FileHandle` slice with full bounds checks and
