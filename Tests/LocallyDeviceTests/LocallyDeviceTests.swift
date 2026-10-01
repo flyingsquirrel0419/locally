@@ -1,4 +1,5 @@
 import XCTest
+import LocallyCore
 @testable import LocallyDevice
 
 final class SystemDeviceProfilerTests: XCTestCase {
@@ -119,6 +120,34 @@ final class DeviceBenchmarkTests: XCTestCase {
         task.cancel()
         let result = await task.value
         XCTAssertTrue(result.cancelled)
+    }
+
+    /// A clock whose `now` jumps forward 2s per access: from the benchmark's
+    /// perspective every chunk of work eats seconds of budget, as on a
+    /// loaded or slow machine. The run must still return promptly (real wall
+    /// time) with partial results flagged `truncated`, never overrun.
+    func testBenchmarkReturnsWithinBudgetWithSlowClock() async {
+        final class FastForwardClock: BenchmarkClock {
+            private let tick = LockedState<ContinuousClock.Instant>(ContinuousClock.now)
+            var now: ContinuousClock.Instant {
+                tick.withLock { t in
+                    let current = t
+                    t += .seconds(2)
+                    return current
+                }
+            }
+        }
+        let realStart = ContinuousClock.now
+        let result = await DeviceBenchmark(timeBudget: 4.5).run(clock: FastForwardClock())
+        let realElapsed = realStart.duration(to: ContinuousClock.now)
+
+        XCTAssertLessThan(realElapsed.components.seconds, 5,
+                          "benchmark with a slow environment must still return within budget")
+        XCTAssertFalse(result.cancelled)
+        XCTAssertTrue(result.truncated,
+                      "later stages must be skipped and flagged once the deadline passes")
+        XCTAssertNil(result.metalGflops)
+        XCTAssertGreaterThan(result.duration, 0)
     }
 }
 
