@@ -1,0 +1,68 @@
+import Foundation
+import LocallyCore
+
+/// A relative, internal 0–1000 score summarizing this device's suitability
+/// for local AI workloads. It is NOT a scientific cross-device benchmark:
+/// it is normalized against a documented reference baseline
+/// (see DECISIONS.md) and intended only to compare configurations of the
+/// same benchmark version.
+public struct AIPerformanceIndex: Codable, Sendable, Hashable {
+    /// Reference baseline: roughly an A14-class device.
+    public static let referenceCPUGFLOPS: Double = 10.0
+    public static let referenceMemoryGBps: Double = 30.0
+    public static let referenceMetalGFLOPS: Double = 500.0
+
+    public var score: Int
+    public var cpuComponent: Double
+    public var memoryComponent: Double
+    public var metalComponent: Double?
+    public var memoryBonusGB: Double
+
+    public init(
+        score: Int,
+        cpuComponent: Double,
+        memoryComponent: Double,
+        metalComponent: Double?,
+        memoryBonusGB: Double
+    ) {
+        self.score = score
+        self.cpuComponent = cpuComponent
+        self.memoryComponent = memoryComponent
+        self.metalComponent = metalComponent
+        self.memoryBonusGB = memoryBonusGB
+    }
+
+    /// Compute the index from measured results plus device memory.
+    /// Returns nil when no metrics were measured at all.
+    public static func compute(
+        benchmark: BenchmarkResult,
+        physicalMemory: UInt64
+    ) -> AIPerformanceIndex? {
+        guard benchmark.cpuGflops != nil || benchmark.memoryCopyGBps != nil
+                || benchmark.metalGflops != nil else { return nil }
+
+        let cpu = (benchmark.cpuGflops ?? 0) / referenceCPUGFLOPS
+        let mem = (benchmark.memoryCopyGBps ?? 0) / referenceMemoryGBps
+        let metal = benchmark.metalGflops.map { $0 / referenceMetalGFLOPS }
+        let memoryGB = Double(physicalMemory) / 1e9
+        // Up to 1.5x scaling for 8GB+, logarithmic so 128GB doesn't explode.
+        let memoryBonus = min(1.5, max(0.25, log2(memoryGB + 1) / log2(9)))
+
+        // Weighted: CPU 40%, memory bandwidth 30%, GPU 30% (redistributed when
+        // Metal is unavailable).
+        let raw: Double
+        if let metal {
+            raw = (cpu * 0.4 + mem * 0.3 + metal * 0.3) * memoryBonus
+        } else {
+            raw = (cpu * 0.55 + mem * 0.45) * memoryBonus
+        }
+        let score = Int((raw * 1000.0).rounded())
+        return AIPerformanceIndex(
+            score: max(0, min(1000, score)),
+            cpuComponent: cpu,
+            memoryComponent: mem,
+            metalComponent: metal,
+            memoryBonusGB: memoryGB
+        )
+    }
+}

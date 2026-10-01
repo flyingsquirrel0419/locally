@@ -1,0 +1,240 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "tab.home" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Home" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "홈" } }
+      }
+    },
+    "tab.models" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Models" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "모델" } }
+      }
+    },
+    "tab.playground" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Playground" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "플레이그라운드" } }
+      }
+    },
+    "tab.downloads" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Downloads" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드" } }
+      }
+    },
+    "tab.settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "설정" } }
+      }
+    },
+    "home.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Locally" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Locally" } }
+      }
+    },
+    "home.score.disclaimer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Relative internal score (0–1000), not a scientific benchmark." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "상대적인 내부 점수(0–1000)이며 과학적 벤치마크가 아닙니다." } }
+      }
+    },
+    "home.benchmark.run" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Run Benchmark" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "벤치마크 실행" } }
+      }
+    },
+    "home.benchmark.running" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Benchmarking…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "벤치마크 실행 중…" } }
+      }
+    },
+    "home.device" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Device" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "기기" } }
+      }
+    },
+    "home.device.model" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Model" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "모델" } }
+      }
+    },
+    "home.device.os" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OS" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "OS" } }
+      }
+    },
+    "home.device.memory" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Physical Memory" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "물리 메모리" } }
+      }
+    },
+    "home.device.budget" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Safe AI Budget" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "안전 AI 메모리 예산" } }
+      }
+    },
+    "home.device.cores" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cores (active/total)" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "코어 (활성/전체)" } }
+      }
+    },
+    "home.status" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Status" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "상태" } }
+      }
+    },
+    "home.status.thermal" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Thermal" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "발열" } }
+      }
+    },
+    "home.status.storage" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Storage (free/total)" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "저장 공간 (여유/전체)" } }
+      }
+    },
+    "home.status.battery" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Battery" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "배터리" } }
+      }
+    },
+    "home.status.metal" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Metal" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Metal" } }
+      }
+    },
+    "home.status.ane" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Neural Engine" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Neural Engine" } }
+      }
+    },
+    "gauge.caption" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AI Score" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "AI 점수" } }
+      }
+    },
+    "gauge.accessibility" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AI performance score" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "AI 성능 점수" } }
+      }
+    },
+    "gauge.unmeasured" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not measured" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "측정되지 않음" } }
+      }
+    },
+    "thermal.nominal" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nominal" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "정상" } }
+      }
+    },
+    "thermal.fair" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Warm" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "약간 높음" } }
+      }
+    },
+    "thermal.serious" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hot" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "높음" } }
+      }
+    },
+    "thermal.critical" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Critical" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "위험" } }
+      }
+    },
+    "common.unknown" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unknown" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "알 수 없음" } }
+      }
+    },
+    "common.available" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Available" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "사용 가능" } }
+      }
+    },
+    "common.unavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unavailable" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "사용 불가" } }
+      }
+    },
+    "models.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Models Installed" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "설치된 모델 없음" } }
+      }
+    },
+    "models.empty.description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Model browsing and download arrive in a later update." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "모델 탐색 및 다운로드는 이후 업데이트에서 제공됩니다." } }
+      }
+    },
+    "playground.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Runtime Yet" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "아직 런타임 없음" } }
+      }
+    },
+    "playground.empty.description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Install a model first; on-device inference arrives in a later update." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "먼저 모델을 설치하세요. 온디바이스 추론은 이후 업데이트에서 제공됩니다." } }
+      }
+    },
+    "downloads.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Downloads" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드 없음" } }
+      }
+    },
+    "downloads.empty.description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Active and finished downloads will appear here." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "진행 중이거나 완료된 다운로드가 여기에 표시됩니다." } }
+      }
+    },
+    "settings.about" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "About" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "정보" } }
+      }
+    },
+    "settings.version" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Version" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "버전" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
