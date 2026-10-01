@@ -52,6 +52,9 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     }
 
     private let parser = GGUFParser()
+    /// Thermal pacing hook, awaited between generated tokens. Default no-op;
+    /// the app injects a policy-backed pacer (see RuntimeRegistry).
+    private let pacer: any GenerationPacer
 
     #if canImport(CLlama) || canImport(llama)
     /// Internal: LlamaScoring.swift builds the TokenScoringBackend on it.
@@ -77,7 +80,9 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     }
     private let state = LoadState()
 
-    public init() {}
+    public init(pacer: any GenerationPacer = NoOpGenerationPacer()) {
+        self.pacer = pacer
+    }
 
     // MARK: - Compatibility
 
@@ -211,6 +216,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
                     seed: request.parameters.seed)
                 if step.isEOG { break }
                 decodeSeconds += stepStart.duration(to: .now).magnitudeSeconds
+                await pacer.pace()
                 if ttft == nil {
                     ttft = promptStart.duration(to: .now).magnitudeSeconds
                 }

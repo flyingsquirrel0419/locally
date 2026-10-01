@@ -29,7 +29,12 @@ final class RuntimeRegistry {
     private(set) var loadedRepoID: String?
 
     init(runtimes: [any ModelCompatibleRuntime]? = nil) {
-        let runtimes = runtimes ?? [GGUFRuntime(), MLXRuntime(), VLMRuntime(), DiffusionRuntime(),
+        // Thermal pacing: every token-generating runtime gets the
+        // policy-backed pacer so a "serious" thermal state slows decode
+        // without the runtimes knowing about the observer.
+        let pacer = PolicyGenerationPacer()
+        let runtimes = runtimes ?? [GGUFRuntime(pacer: pacer), MLXRuntime(pacer: pacer),
+                                    VLMRuntime(pacer: pacer), DiffusionRuntime(),
                                     ExperimentalVideoGenerationRuntime()]
         self.runtimes = runtimes
         self.router = RuntimeRouter(runtimes: runtimes)

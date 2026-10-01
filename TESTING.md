@@ -11,9 +11,32 @@ swift build -j 2
 swift test -j 2
 ```
 
-Swift 6 tools, runs on Linux and macOS. 286 tests cover the analyzer,
-registry, download manager, runtime contracts, and GGUF/llama adapters
-without touching the network or a real model.
+Swift 6 tools, runs on Linux and macOS. As of 2026-10-02 the full suite
+executes 406 tests (15 skipped: the live-gated ones) covering the
+analyzer, registry, download manager, runtime contracts, GGUF/llama
+adapters, ZIP extraction, decision engine, vision/video planners, and the
+thermal `GenerationPacer` — without touching the network or a real model.
+
+### Failure-path suites
+
+Dedicated failure-path coverage lives in:
+
+- `Tests/LocallyStorageTests/DownloadFailurePathTests.swift` — resume
+  corruption, ENOSPC mapping, retry clearing stale partials, redirect and
+  progress-after-verifying handling
+- `Tests/LocallyStorageTests/RegistryFailurePathTests.swift` — corrupted
+  registry JSON, concurrent writes, delete-protection of loaded models
+- `Tests/LocallyRuntimeTests/RuntimeFailurePathTests.swift` — run-before-
+  load, context overflow, corrupted model files, cancellation
+- `Tests/LocallyRuntimeTests/GGUFParserTests.swift` — hostile/truncated
+  GGUF headers, limit enforcement
+
+### Live end-to-end
+
+`Tests/LocallyE2ETests/LocallyE2ETests.swift` (gated on
+`LOCALLY_LIVE_E2E=1`, needs network + llama): HF URL → analyze →
+compatibility → download → simulated relaunch → load → chat → benchmark →
+unload → delete, printing per-stage timings.
 
 **Clean rebuild after enum or generic changes.** The incremental cache has
 been observed to leave stale object files after inserting a case into a
@@ -57,6 +80,8 @@ Loads `.deps/models/SmolLM2-135M-Instruct-Q4_K_M.gguf` through the llama
 bridge and runs a handful of text generations plus a three-question
 decision pass over the token-scoring path. Asserts the single-terminal-
 event invariant on every stream and that scored probabilities sum to 1.
+`GenerationPacerTests` also uses this gate to assert the decode loop
+awaits the pacer exactly once per generated token.
 
 ## llama.cpp setup
 

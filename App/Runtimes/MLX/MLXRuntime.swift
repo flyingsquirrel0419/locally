@@ -129,9 +129,15 @@ public final class MLXRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     public static let cacheLimitBytes = 64 * 1024 * 1024
     #endif
 
+    /// Thermal pacing hook, awaited between generated tokens. Default no-op;
+    /// RuntimeRegistry injects the policy-backed pacer.
+    private let pacer: any GenerationPacer
+
     // Memory warnings are handled app-wide by ResourcePolicyObserver; this
     // runtime registers no NotificationCenter observers of its own.
-    public init() {}
+    public init(pacer: any GenerationPacer = NoOpGenerationPacer()) {
+        self.pacer = pacer
+    }
 
     /// Architecture string from a local config.json without loading weights;
     /// used so runtime overrides for MLX format models can be checked even
@@ -333,6 +339,7 @@ public final class MLXRuntime: ModelCompatibleRuntime, @unchecked Sendable {
                 case .chunk(let text):
                     generated += text
                     continuation.yield(.token(text))
+                    await pacer.pace()
                     if request.parameters.stop.contains(where: { generated.hasSuffix($0) }) {
                         break streamLoop
                     }

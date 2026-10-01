@@ -677,3 +677,22 @@ inject the header by hand, which meant the failure-path suite wasn't actually
 testing the manager's resume path end-to-end. The mock now computes the same
 header from the part file, appends the missing suffix on a Range request, and
 overwrites on a plain GET (matching real servers).
+
+## Week 13
+
+### 2026-10-02 — Thermal pacing via an injected GenerationPacer
+
+Decode loops (GGUF in the package, MLX/VLM in the app) await a
+`GenerationPacer` between tokens. The protocol lives in LocallyRuntime so
+the package stays free of any dependency on LocallyDevice/App, the default
+is `NoOpGenerationPacer` (zero-overhead fast path), and the app injects
+`PolicyGenerationPacer`, which reads the current delay from
+`ResourcePolicyObserver` on every token — throttling starts and stops live
+without rebuilding runtimes. An alternative of passing a static delay at
+load time was rejected: thermal state changes mid-generation.
+
+### 2026-10-02 — DownloadManager static helpers moved to DownloadSupport
+
+`sha256Hex`/`mapError`/`isAuthFailure`/`isNetworkish` moved into a
+`DownloadManager` extension in DownloadSupport.swift to bring the manager
+under the 500-line file limit (515 → 472). No behavior change.

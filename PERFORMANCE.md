@@ -83,6 +83,26 @@ Long-generation regression test (256 tokens, greedy, `contextLength: 1024`):
 No slowdown cliff: the per-token rate at token 256 is within noise of the
 rate at token 1 (the test fails the run if generation stalls).
 
+### Re-measurement, 2026-10-02 (with thermal-pacing hook added)
+
+Re-run on the same container after the Week-13 thermal-pacing change
+(`GenerationPacer`, no-op by default in the package). The decode loop now
+awaits `pacer.pace()` per token; the no-op cost is within noise.
+
+Short run (prompt as above, greedy, maxTokens=32, release):
+
+| Metric | Value |
+|--------|------:|
+| Load time | 0.062 s |
+| TTFT   | 0.072 s |
+| tok/s  | 120.1 (7 generated tokens) |
+| Peak RSS | 364 MB (process-level, approximate) |
+
+Long run (`testLongGenerationHasNoSlowdownCliff`, release): 256 tokens
+sustained at **130.4 tok/s**, peak 215 MB. All 5 `LiveLlamaTests` passed in
+release. Run-to-run variance on this shared 2-core box is ±30%, so 120–148
+tok/s short-run is the healthy band; no regression from the pacer.
+
 ### Commands
 
 ```sh
@@ -130,3 +150,23 @@ LOCALLY_LIVE_LLAMA=1 swift test -c release -j 2 --filter LiveLlamaTests
 - `peakMemoryBytes` is process RSS, not a per-model counter — llama.cpp
   does not expose one through the C API. Labelled approximate in the
   source and in `InferenceMetadata.peakMemoryBytes`'s docstring.
+
+## iPhone performance: not yet measured
+
+No on-device numbers exist yet. Everything above is a Linux x86 CPU
+baseline; an iPhone (Metal GPU for MLX/VLM/diffusion, ARM CPU for GGUF)
+will produce materially different numbers, and none should be extrapolated
+from this page.
+
+How to measure on device:
+
+1. Build and run the app on a physical iPhone (Xcode 16+, iOS 17+;
+   simulator has no Metal and is not representative).
+2. Run the Home-tab benchmark once so `CompatibilityProvider` has a real
+   device sample (it persists across relaunch).
+3. Load a model in the Playground and generate. Every run's
+   `.completed` event carries `InferenceMetadata` — TTFT, tokens/sec,
+   generated-token count, peak memory — shown in the playground after
+   generation and returned to callers of `AIRuntime.run`.
+4. Record those values per device class (chip, RAM) and per runtime
+   (GGUF vs MLX) here before quoting any iPhone performance claim.
