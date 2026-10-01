@@ -69,10 +69,9 @@ final class GGUFRuntimeTests: XCTestCase {
             model: ModelDescriptor(repoID: "a/b", name: "b", modality: .text,
                                    formats: [.gguf]),
             input: .text("hello"))
-        var sawFailure = false
-        for try await event in runtime.run(request) {
-            if case .failed = event { sawFailure = true }
+        let events = await TerminalEventInvariant.assertStream(runtime.run(request))
+        guard case .failed = events.last else {
+            return XCTFail("expected terminal .failed, got \(events)")
         }
-        XCTAssertTrue(sawFailure)
     }
 }

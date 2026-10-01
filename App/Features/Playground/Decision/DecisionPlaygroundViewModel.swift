@@ -202,14 +202,24 @@ final class DecisionPlaygroundViewModel {
                 for try await event in stream {
                     if Task.isCancelled { break }
                     switch event {
-                    case .completed(let result):
-                        for artifact in result.artifacts {
-                            guard case .decision(let decision) = artifact else { continue }
-                            perQuestion.append(Self.answered(
-                                decision, since: start,
-                                alreadyAnswered: perQuestion.count))
-                        }
+                    case .decision(let decision):
+                        perQuestion.append(Self.answered(
+                            decision, since: start,
+                            alreadyAnswered: perQuestion.count))
                         self.results = perQuestion
+                    case .completed(let result):
+                        // Terminal: rebuild from the full artifact list so a
+                        // consumer that joined late still sees everything.
+                        let all = result.artifacts.compactMap { artifact -> DecisionResult? in
+                            guard case .decision(let d) = artifact else { return nil }
+                            return d
+                        }
+                        if !all.isEmpty {
+                            perQuestion = all.enumerated().map { index, decision in
+                                Self.answered(decision, since: start, alreadyAnswered: index)
+                            }
+                            self.results = perQuestion
+                        }
                     case .failed(let error):
                         self.lastError = error.userMessage
                     default:

@@ -37,12 +37,11 @@ final class DecisionRuntimeTests: XCTestCase {
         let runtime = DecisionRuntime(engine: DecisionEngine(scoringBackend: backend))
         let req = request(schemaJSON: #"{"state": "s", "questions": {"a": {"type": "boolean"}, "b": {"type": "boolean"}}}"#)
         let events = await collect(runtime.run(req))
+        TerminalEventInvariant.assertExactlyOneTerminalEvent(events)
 
         XCTAssertEqual(events.first, .started(requestID: req.id))
         let decisions = events.compactMap { event -> DecisionResult? in
-            guard case .completed(let result) = event,
-                  result.artifacts.count == 1,
-                  case .decision(let d) = result.artifacts.first else { return nil }
+            guard case .decision(let d) = event else { return nil }
             return d
         }
         XCTAssertEqual(decisions.map(\.key), ["a", "b"])
@@ -61,6 +60,7 @@ final class DecisionRuntimeTests: XCTestCase {
         let runtime = DecisionRuntime(engine: DecisionEngine(scoringBackend: backend))
         let req = request(schemaJSON: #"{"state": "s", "questions": {"a": {"type": "wat"}}}"#)
         let events = await collect(runtime.run(req))
+        TerminalEventInvariant.assertExactlyOneTerminalEvent(events)
         guard case .failed(let error) = events.last else {
             return XCTFail("expected .failed, got \(String(describing: events.last))")
         }
@@ -73,6 +73,7 @@ final class DecisionRuntimeTests: XCTestCase {
         let runtime = DecisionRuntime(engine: DecisionEngine(scoringBackend: MockScoringBackend()))
         let req = AIRequest(model: model(), input: .image(Data([1, 2, 3])))
         let events = await collect(runtime.run(req))
+        TerminalEventInvariant.assertExactlyOneTerminalEvent(events)
         guard case .failed(let error) = events.last else {
             return XCTFail("expected .failed")
         }
@@ -84,6 +85,7 @@ final class DecisionRuntimeTests: XCTestCase {
         let req = AIRequest(model: model(),
                             input: .text(#"{"state": "s", "questions": {"a": {"type": "boolean"}}}"#))
         let events = await collect(runtime.run(req))
+        TerminalEventInvariant.assertExactlyOneTerminalEvent(events)
         guard case .completed(let final) = events.last else {
             return XCTFail("expected .completed, got \(String(describing: events.last))")
         }
@@ -126,7 +128,7 @@ final class DecisionRuntimeTests: XCTestCase {
         XCTAssertNil(empty.method(for: q))
     }
 
-    // MARK: - Live test against the real GGUF runtime (generation path)
+    // MARK: - Live tests against the real GGUF runtime
 
     private var liveModelURL: URL? {
         guard ProcessInfo.processInfo.environment["LOCALLY_LIVE_LLAMA"] == "1" else { return nil }
@@ -139,20 +141,113 @@ final class DecisionRuntimeTests: XCTestCase {
         return nil
     }
 
-    func testLiveDecisionViaGenerationPath() async throws {
-        guard let url = liveModelURL else {
-            throw XCTSkip("LOCALLY_LIVE_LLAMA not set or model missing")
-        }
+    private func liveDescriptor(_ url: URL) -> ModelDescriptor {
         var descriptor = ModelDescriptor(repoID: "bartowski/SmolLM2-135M-Instruct-GGUF",
                                          name: "SmolLM2-135M-Instruct", architecture: "llama",
                                          modality: .text, formats: [.gguf])
         descriptor.metadata["localPath"] = url.path
+        return descriptor
+    }
+
+    /// Live scoring-path test: boolean + choice + probability questions
+    /// answered by llama token log-probabilities. Asserts the stream
+    /// contract, schema-valid values, and a normalized distribution.
+    func testLiveDecisionViaScoringPath() async throws {
+        guard let url = liveModelURL else {
+            throw XCTSkip("LOCALLY_LIVE_LLAMA not set or model missing")
+        }
+        let descriptor = liveDescriptor(url)
+
+        let gguf = GGUFRuntime()
+        try await gguf.load(descriptor)
+        defer { Task { await gguf.unload() } }
+        XCTAssertNotNil(gguf.makeScoringBackend())
+
+        let runtime = DecisionRuntime(wrapping: gguf, model: descriptor)
+        let schemaJSON = """
+        {"state": "A customer requests a refund for a broken product, 10 days after purchase.",
+         "questions": {
+           "approve": {"type": "boolean", "instructions": "Should the refund be approved?"},
+           "category": {"type": "choice", "options": ["refund", "exchange", "reject"],
+                        "instructions": "Pick the best resolution."},
+           "confidence": {"type": "probability",
+                          "instructions": "How likely is the customer to stay?"}
+        }}
+        """
+        let value = try JSONDecoder().decode(JSONValue.self, from: Data(schemaJSON.utf8))
+        guard case .object(let object) = value else { return XCTFail("schema not an object") }
+        let req = AIRequest(model: descriptor, input: .json(object))
+
+        let events = await TerminalEventInvariant.assertStream(runtime.run(req))
+        XCTAssertEqual(events.first, .started(requestID: req.id))
+        guard case .completed = events.last else {
+            return XCTFail("expected terminal .completed, got \(events)")
+        }
+
+        var results: [DecisionResult] = []
+        for event in events {
+            if case .decision(let d) = event { results.append(d) }
+        }
+        let byKey = Dictionary(results.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
+        print("LIVE SCORED DECISION >>> "
+              + "approve=\(String(describing: byKey["approve"])) "
+              + "category=\(String(describing: byKey["category"])) "
+              + "confidence=\(String(describing: byKey["confidence"]))")
+        XCTAssertEqual(byKey.count, 3)
+
+        for (key, result) in byKey {
+            XCTAssertEqual(result.method, .scored, "\(key) should be scored, not generated")
+            if let probs = result.probabilities {
+                let sum = probs.values.reduce(0, +)
+                XCTAssertEqual(sum, 1.0, accuracy: 1e-3,
+                               "\(key) probabilities must sum to 1: \(probs)")
+                for (option, p) in probs {
+                    XCTAssertGreaterThanOrEqual(p, 0, "\(key).\(option) < 0")
+                    XCTAssertLessThanOrEqual(p, 1, "\(key).\(option) > 1")
+                }
+            } else {
+                XCTFail("\(key) scored result must carry probabilities")
+            }
+        }
+        if let approve = byKey["approve"] {
+            guard case .bool = approve.value else {
+                return XCTFail("approve value is not a bool: \(approve.value)")
+            }
+        }
+        if let category = byKey["category"] {
+            guard case .string(let s) = category.value else {
+                return XCTFail("category value is not a string: \(category.value)")
+            }
+            XCTAssertTrue(["refund", "exchange", "reject"].contains(s))
+        }
+        if let confidence = byKey["confidence"] {
+            guard case .number(let p) = confidence.value else {
+                return XCTFail("confidence value is not a number: \(confidence.value)")
+            }
+            XCTAssertGreaterThanOrEqual(p, 0)
+            XCTAssertLessThanOrEqual(p, 1)
+        }
+    }
+
+    /// Live generation-path test (no scoring backend wired): the 135M model
+    /// may answer poorly, so two acceptable outcomes: (a) schema-valid
+    /// results for both questions, or (b) a clean validation error (never
+    /// unvalidated output).
+    func testLiveDecisionViaGenerationPath() async throws {
+        guard let url = liveModelURL else {
+            throw XCTSkip("LOCALLY_LIVE_LLAMA not set or model missing")
+        }
+        let descriptor = liveDescriptor(url)
 
         let gguf = GGUFRuntime()
         try await gguf.load(descriptor)
         defer { Task { await gguf.unload() } }
 
-        let runtime = DecisionRuntime(wrapping: gguf, model: descriptor)
+        // Force generation-only: a DecisionRuntime whose engine has no
+        // scoring backend, wrapping the same text runtime.
+        let adapter = GenerationBackendAdapter(runtime: gguf, model: descriptor)
+        let runtime = DecisionRuntime(
+            engine: DecisionEngine(generationBackend: adapter), textRuntime: gguf)
         let schemaJSON = """
         {"state": "A customer requests a refund for a broken product, 10 days after purchase.",
          "questions": {
@@ -165,10 +260,13 @@ final class DecisionRuntimeTests: XCTestCase {
         guard case .object(let object) = value else { return XCTFail("schema not an object") }
         let req = AIRequest(model: descriptor, input: .json(object))
 
+        let events = await TerminalEventInvariant.collect(runtime.run(req))
         var results: [DecisionResult] = []
         var failure: LocallyError?
-        for try await event in runtime.run(req) {
+        for event in events {
             switch event {
+            case .decision(let d):
+                results.append(d)
             case .completed(let result):
                 for artifact in result.artifacts {
                     if case .decision(let d) = artifact { results.append(d) }
@@ -178,15 +276,16 @@ final class DecisionRuntimeTests: XCTestCase {
             default: break
             }
         }
+        // Dedupe: a question appears both as a .decision event and inside
+        // the final .completed result.
+        let byKey = Dictionary(results.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
 
-        // The 135M model may answer poorly. Two acceptable outcomes:
-        //  (a) schema-valid results for both questions, or
-        //  (b) a clean validation error (never unvalidated output).
         if let failure {
+            TerminalEventInvariant.assertExactlyOneTerminalEvent(events)
             print("LIVE DECISION >>> failed cleanly: \(failure.userMessage) | \(failure.technicalDetail)")
             XCTAssertFalse(failure.userMessage.isEmpty)
         } else {
-            let byKey = Dictionary(results.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
+            TerminalEventInvariant.assertExactlyOneTerminalEvent(events)
             print("LIVE DECISION >>> approve=\(String(describing: byKey["approve"]?.value)) "
                   + "category=\(String(describing: byKey["category"]?.value))")
             XCTAssertEqual(byKey.count, 2)

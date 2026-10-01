@@ -1,5 +1,6 @@
 import Foundation
 import LocallyCore
+import LocallyDevice
 import LocallyRuntime
 
 /// Text-generation runtime for MLX-format models (safetensors + config.json),
@@ -127,12 +128,11 @@ public final class MLXRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     }
     private let observerBox = ObserverBox()
 
-    /// Fraction of physical memory offered as MLX's memory limit. iOS kills
-    /// apps well below physical RAM; 0.55 matches the project-wide safe
-    /// budget heuristic (see DECISIONS.md).
-    public static let memoryBudgetFraction = 0.55
-    /// Cap for MLX's buffer cache so long sessions don't grow unbounded.
-    public static let cacheLimitFraction = 0.25
+    /// Fixed cap for MLX's Metal buffer cache. 64 MB is enough to keep the
+    /// steady-state decode loop from re-allocating its small temporaries
+    /// every token, but small enough that a memory warning isn't a cached
+    /// GPU buffer the allocator refuses to release. See DECISIONS.md.
+    public static let cacheLimitBytes = 64 * 1024 * 1024
     #endif
 
     public init() {
@@ -232,10 +232,13 @@ public final class MLXRuntime: ModelCompatibleRuntime, @unchecked Sendable {
                 technicalDetail: "config.json missing in \(path)")
         }
 
-        // Bound MLX's allocator to the device safe budget before loading.
+        // Bound MLX's allocator to the shared device safe budget before
+        // loading (same heuristic the compatibility engine uses), and cap
+        // the Metal buffer cache at a small fixed size.
         let physical = ProcessInfo.processInfo.physicalMemory
-        MLX.Memory.memoryLimit = Int(Double(physical) * Self.memoryBudgetFraction)
-        MLX.Memory.cacheLimit = Int(Double(physical) * Self.cacheLimitFraction)
+        MLX.Memory.memoryLimit = Int(MemoryBudget.safeAIBudget(
+            physicalMemory: physical, availableEstimate: physical))
+        MLX.Memory.cacheLimit = Self.cacheLimitBytes
 
         let start = ContinuousClock.now
         do {

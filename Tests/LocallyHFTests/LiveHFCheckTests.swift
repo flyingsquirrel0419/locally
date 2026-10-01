@@ -39,4 +39,46 @@ final class LiveHFCheckTests: XCTestCase {
             """)
         }
     }
+
+    /// GGUF-only repo: the analyzer must Range-fetch the chosen variant's
+    /// header and surface params / layers / kvHeads / context / template
+    /// from it — none of that is in a config.json (there isn't one).
+    func testLiveGGUFHeaderAnalysis() async throws {
+        guard liveEnabled else {
+            throw XCTSkip("Set LOCALLY_LIVE_HF=1 to run the live Hugging Face check")
+        }
+        let client = HFClient(transport: URLSessionTransport(),
+                              tokenStore: InMemoryTokenStore())
+        let analyzer = RepositoryAnalyzer()
+        let reference = try HFRepoReference(parsing: "bartowski/SmolLM2-135M-Instruct-GGUF")
+        let descriptor = try await analyzer.analyze(reference, client: client)
+
+        XCTAssertTrue(descriptor.formats.contains(.gguf))
+        XCTAssertEqual(descriptor.metadata["gguf_architecture"], "llama")
+        XCTAssertEqual(descriptor.metadata["chat_template"], "gguf")
+
+        // Ground truth for SmolLM2-135M (Q4_K_M): 134.5M stored params,
+        // 30 layers, 9 attn heads, 3 kv heads, 8192 context.
+        let params = try XCTUnwrap(descriptor.parameterCount, "params must come from the GGUF header")
+        XCTAssertEqual(params, 134_515_008, accuracy: 1_000_000)
+        XCTAssertEqual(descriptor.contextLength, 8192)
+        XCTAssertEqual(descriptor.architectureHints?.numLayers, 30)
+        XCTAssertEqual(descriptor.architectureHints?.numAttentionHeads, 9)
+        XCTAssertEqual(descriptor.architectureHints?.numKVHeads, 3)
+        XCTAssertEqual(descriptor.architectureHints?.hiddenSize, 576)
+
+        print("""
+
+        === LIVE GGUF: \(descriptor.repoID) ===
+          params:      \(params)
+          layers:      \(descriptor.architectureHints?.numLayers.map(String.init) ?? "-")
+          kvHeads:     \(descriptor.architectureHints?.numKVHeads.map(String.init) ?? "-")
+          heads:       \(descriptor.architectureHints?.numAttentionHeads.map(String.init) ?? "-")
+          hidden:      \(descriptor.architectureHints?.hiddenSize.map(String.init) ?? "-")
+          context:     \(descriptor.contextLength.map(String.init) ?? "-")
+          template:    \(descriptor.metadata["chat_template"] ?? "-")
+          arch:        \(descriptor.metadata["gguf_architecture"] ?? "-")
+          quant meta:  \(descriptor.metadata["quantization"] ?? "-")
+        """)
+    }
 }

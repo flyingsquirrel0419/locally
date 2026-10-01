@@ -12,7 +12,15 @@ struct PlaygroundView: View {
     @Environment(RuntimeRegistryHolder.self) private var runtimes
     @Environment(AppNavigation.self) private var navigation
 
+    /// For text models the playground offers two modes: free chat, or the
+    /// decision surface (the decision runtime wraps the same text backend).
+    enum PlaygroundMode: String, CaseIterable, Identifiable {
+        case chat, decision
+        var id: String { rawValue }
+    }
+
     @State private var selectedID: String?
+    @State private var mode: PlaygroundMode = .chat
     @State private var selectionTask: Task<Void, Never>?
 
     init() {}
@@ -44,13 +52,16 @@ struct PlaygroundView: View {
 
     // MARK: - Model list
 
-    /// Installed text models; MLX and GGUF formats both welcome — routing
-    /// decides which runtime serves the selected model.
+    /// Installed models the playground can serve: text (chat or decision
+    /// mode) and decision-modality models. MLX and GGUF formats both
+    /// welcome — routing decides which runtime serves the selection.
     private var installedTextModels: [InstalledModel] {
         guard let registry = library.registry else { return [] }
         return registry.list().filter { model in
             !model.hasMissingFiles
-                && (model.descriptor.modality == .text || model.descriptor.modality == .unknown)
+                && (model.descriptor.modality == .text
+                    || model.descriptor.modality == .unknown
+                    || model.descriptor.modality == .decision)
         }
     }
 
@@ -90,23 +101,36 @@ struct PlaygroundView: View {
     }
 
     /// One session view per model+runtime decision: id() forces a fresh
-    /// ChatViewModel when either changes, so stale sessions never leak.
+    /// view model when either changes, so stale sessions never leak.
     @ViewBuilder
     private func session(for model: InstalledModel,
                          registry: RuntimeRegistry) -> some View {
         let prepared = preparedDescriptor(for: model, registry: registry)
         let decision = registry.router.decide(for: prepared, on: registry.device)
         switch model.descriptor.modality {
+        case .decision:
+            decisionSession(prepared: prepared, decision: decision, registry: registry,
+                            id: model.id)
         case .text, .unknown:
-            switch decision.rating {
-            case .unsupported(let reason):
-                UnsupportedModelView(reason: reason)
-            case .risky(let reason):
-                RiskyModelView(model: prepared, registry: registry, warning: reason)
-                    .id(model.id)
-            case .supported:
-                ChatView(model: prepared, registry: registry)
-                    .id(model.id)
+            VStack(spacing: 0) {
+                Picker(String(localized: "playground.mode", table: "Playground"),
+                       selection: $mode) {
+                    Text(String(localized: "playground.mode.chat", table: "Playground"))
+                        .tag(PlaygroundMode.chat)
+                    Text(String(localized: "playground.mode.decision", table: "Playground"))
+                        .tag(PlaygroundMode.decision)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.top, DS.Spacing.xs)
+                switch mode {
+                case .chat:
+                    chatSession(prepared: prepared, decision: decision, registry: registry,
+                                id: model.id)
+                case .decision:
+                    decisionSession(prepared: prepared, decision: decision, registry: registry,
+                                    id: "\(model.id)#decision")
+                }
             }
         default:
             ContentUnavailableView(
@@ -116,6 +140,43 @@ struct PlaygroundView: View {
                     localized: "playground.unsupportedModality.description",
                     table: "Playground"))
             )
+        }
+    }
+
+    /// Chat surface, gated on the router's rating for the model.
+    @ViewBuilder
+    private func chatSession(prepared: ModelDescriptor,
+                             decision: RuntimeRouter.Decision,
+                             registry: RuntimeRegistry, id: String) -> some View {
+        switch decision.rating {
+        case .unsupported(let reason):
+            UnsupportedModelView(reason: reason)
+        case .risky(let reason):
+            RiskyModelView(model: prepared, registry: registry, warning: reason)
+                .id(id)
+        case .supported:
+            ChatView(model: prepared, registry: registry)
+                .id(id)
+        }
+    }
+
+    /// Decision surface, gated on the same router rating as chat: the
+    /// decision runtime wraps the router-chosen text backend, so an
+    /// unsupported text runtime means an unsupported decision run.
+    @ViewBuilder
+    private func decisionSession(prepared: ModelDescriptor,
+                                 decision: RuntimeRouter.Decision,
+                                 registry: RuntimeRegistry, id: String) -> some View {
+        switch decision.rating {
+        case .unsupported(let reason):
+            UnsupportedModelView(reason: reason)
+        case .risky(let reason):
+            RiskyDecisionModelView(model: prepared, registry: registry, warning: reason)
+                .id(id)
+        case .supported:
+            DecisionPlaygroundView(model: prepared, router: registry.router,
+                                   device: registry.device)
+                .id(id)
         }
     }
 
@@ -200,6 +261,34 @@ private struct RiskyModelView: View {
     var body: some View {
         if proceed {
             ChatView(model: model, registry: registry)
+        } else {
+            ContentUnavailableView {
+                Label(String(localized: "playground.risky.title", table: "Playground"),
+                      systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(warning)
+            } actions: {
+                Button(String(localized: "playground.risky.tryAnyway", table: "Playground")) {
+                    proceed = true
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+}
+
+/// Risky gate for the decision surface: same warning flow as chat, then the
+/// decision playground.
+private struct RiskyDecisionModelView: View {
+    let model: ModelDescriptor
+    let registry: RuntimeRegistry
+    let warning: String
+    @State private var proceed = false
+
+    var body: some View {
+        if proceed {
+            DecisionPlaygroundView(model: model, router: registry.router,
+                                   device: registry.device)
         } else {
             ContentUnavailableView {
                 Label(String(localized: "playground.risky.title", table: "Playground"),

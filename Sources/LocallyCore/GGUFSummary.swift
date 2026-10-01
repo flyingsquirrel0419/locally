@@ -1,5 +1,4 @@
 import Foundation
-import LocallyCore
 
 /// Structured, typed view over a parsed GGUF header's metadata.
 public struct GGUFModelSummary: Sendable, Hashable {

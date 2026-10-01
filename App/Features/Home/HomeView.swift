@@ -64,6 +64,8 @@ final class HomeViewModel {
                     index = AIPerformanceIndex.compute(benchmark: result,
                                                        physicalMemory: physical)
                 }
+                // Feed the Models tab: speed ratings read this benchmark.
+                CompatibilityProvider.shared.recordBenchmark(result)
                 isBenchmarking = false
             }
         }

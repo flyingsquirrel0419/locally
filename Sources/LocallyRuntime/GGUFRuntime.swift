@@ -54,7 +54,8 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     private let parser = GGUFParser()
 
     #if canImport(CLlama) || canImport(llama)
-    private let bridge = LlamaBridge()
+    /// Internal: LlamaScoring.swift builds the TokenScoringBackend on it.
+    let bridge = LlamaBridge()
     #endif
 
     /// Mutable load state, guarded by the actor so async contexts stay safe.
@@ -165,6 +166,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
                     technicalDetail: "run() before load()")
             }
 
+            continuation.yield(.preparing("prompt"))
             let session = sessionFor(request: request)
             let maxTokens = max(request.parameters.maxTokens, 1)
 
@@ -186,6 +188,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
             let peakBefore = await bridge.residentMemoryBytes()
             let promptStart = ContinuousClock.now
             try await bridge.decode(tokens: promptTokens)
+            continuation.yield(.preparing("decode"))
 
             var assembler = PieceAssembler()
             var generated = ""
