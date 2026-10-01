@@ -87,9 +87,14 @@ final class Inflater: @unchecked Sendable {
         }
         let produced = scratch.count - s.pointee.dst_size
         output.append(contentsOf: scratch[0..<produced])
-        // compression_stream_process may leave input unconsumed when the
-        // output buffer fills; loop until all input is drained.
-        while status == COMPRESSION_STATUS_OK && s.pointee.src_size > 0 {
+        // compression_stream_process may return COMPRESSION_STATUS_OK with
+        // input still unconsumed (output buffer filled) or with output still
+        // pending after the input is drained (decoder window not yet flushed,
+        // seen on iOS when FINALIZE is set). Re-pump while the stream keeps
+        // making progress: stop on END, on ERROR, or when a call neither
+        // consumed input nor produced output.
+        while status == COMPRESSION_STATUS_OK {
+            let consumedBefore = s.pointee.src_size
             let more: compression_status = scratch.withUnsafeMutableBytes { dst in
                 s.pointee.dst_ptr = dst.baseAddress!.assumingMemoryBound(to: UInt8.self)
                 s.pointee.dst_size = dst.count
@@ -98,6 +103,8 @@ final class Inflater: @unchecked Sendable {
             let n = scratch.count - s.pointee.dst_size
             output.append(contentsOf: scratch[0..<n])
             status = more
+            let madeProgress = n > 0 || s.pointee.src_size < consumedBefore
+            if !madeProgress { break }
         }
         switch status {
         case COMPRESSION_STATUS_OK, COMPRESSION_STATUS_END:
@@ -139,6 +146,7 @@ final class Inflater: @unchecked Sendable {
             let n = scratch.count - Int(zstream.avail_out)
             output.append(contentsOf: scratch[0..<n])
             status = more
+            if n == 0 { break }  // no progress possible without more input
         }
         switch status {
         case Z_OK, Z_BUF_ERROR:
