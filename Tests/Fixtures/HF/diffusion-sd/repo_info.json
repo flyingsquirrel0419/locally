@@ -1,0 +1,23 @@
+{
+  "id": "sd-community/tiny-sd",
+  "author": "sd-community",
+  "sha": "d4e5f6a7b8c90000000000000000000000000004",
+  "lastModified": "2024-11-01T08:00:00.000Z",
+  "private": false,
+  "gated": false,
+  "pipeline_tag": "text-to-image",
+  "library_name": "diffusers",
+  "tags": ["diffusers", "stable-diffusion", "text-to-image"],
+  "siblings": [
+    { "rfilename": ".gitattributes" },
+    { "rfilename": "README.md", "size": 8000 },
+    { "rfilename": "model_index.json", "size": 520 },
+    { "rfilename": "scheduler/scheduler_config.json", "size": 300 },
+    { "rfilename": "text_encoder/config.json", "size": 430 },
+    { "rfilename": "text_encoder/model.safetensors", "size": 246000000, "lfs": { "size": 246000000, "sha256": "7ac5aa352c4951922418e9a5f8a262d49fb0db8067537ba647ef54b7678b4ae6" } },
+    { "rfilename": "unet/config.json", "size": 900 },
+    { "rfilename": "unet/diffusion_pytorch_model.safetensors", "size": 860000000, "lfs": { "size": 860000000, "sha256": "63b6eda249ac4780598033337df61aa0f7a00b21c600bf89bc6ebcb3b246ce46" } },
+    { "rfilename": "vae/config.json", "size": 410 },
+    { "rfilename": "vae/diffusion_pytorch_model.safetensors", "size": 167000000, "lfs": { "size": 167000000, "sha256": "8b7e17f4648aced3bde60e775f90a94956642275149508a4332e493a6ef9a198" } }
+  ]
+}

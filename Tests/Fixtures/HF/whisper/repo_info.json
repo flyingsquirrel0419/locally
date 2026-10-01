@@ -1,0 +1,22 @@
+{
+  "id": "openai/whisper-tiny",
+  "author": "openai",
+  "sha": "e5f6a7b8c9d00000000000000000000000000005",
+  "lastModified": "2024-09-12T14:00:00.000Z",
+  "private": false,
+  "gated": false,
+  "pipeline_tag": "automatic-speech-recognition",
+  "library_name": "transformers",
+  "tags": ["whisper", "audio", "automatic-speech-recognition"],
+  "siblings": [
+    { "rfilename": ".gitattributes" },
+    { "rfilename": "README.md", "size": 11000 },
+    { "rfilename": "config.json", "size": 1300 },
+    { "rfilename": "generation_config.json", "size": 280 },
+    { "rfilename": "preprocessor_config.json", "size": 210 },
+    { "rfilename": "tokenizer_config.json", "size": 9900 },
+    { "rfilename": "model.safetensors", "size": 151000000, "lfs": { "size": 151000000, "sha256": "851830d87e60f5cb584e55ad4f8f37062f679e87919ea51e3fbb4a0f4ee5c7ee" } },
+    { "rfilename": "pytorch_model.bin", "size": 151000000, "lfs": { "size": 151000000, "sha256": "0d70798b8d79974621d14dc8a3797bab61dc91ee7924c5290670257cd60043b1" } },
+    { "rfilename": "onnx/model.onnx", "size": 98000000, "lfs": { "size": 98000000, "sha256": "a5aeabf6d6d97f5d6466ad0c1dce0d3a4beeced966bdb93cc3239a52a0631418" } }
+  ]
+}

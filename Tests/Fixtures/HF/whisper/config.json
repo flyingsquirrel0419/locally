@@ -1,0 +1,10 @@
+{
+  "architectures": ["WhisperForConditionalGeneration"],
+  "model_type": "whisper",
+  "d_model": 384,
+  "encoder_layers": 4,
+  "decoder_layers": 4,
+  "vocab_size": 51865,
+  "max_source_positions": 1500,
+  "max_target_positions": 448
+}

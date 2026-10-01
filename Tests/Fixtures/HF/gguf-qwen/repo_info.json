@@ -1,0 +1,21 @@
+{
+  "id": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+  "author": "Qwen",
+  "sha": "b2c3d4e5f6a70000000000000000000000000002",
+  "lastModified": "2025-02-01T09:00:00.000Z",
+  "private": false,
+  "gated": false,
+  "pipeline_tag": "text-generation",
+  "library_name": "transformers",
+  "tags": ["gguf", "text-generation", "qwen2"],
+  "siblings": [
+    { "rfilename": ".gitattributes" },
+    { "rfilename": "README.md", "size": 9800 },
+    { "rfilename": "qwen2.5-0.5b-instruct-f16.gguf", "size": 1100000000, "lfs": { "size": 1100000000, "sha256": "922dd1f4da8e1c3330d34e8f84a087fca4ab13f1442686e54807c64cdf2eb925" } },
+    { "rfilename": "qwen2.5-0.5b-instruct-q8_0.gguf", "size": 676000000, "lfs": { "size": 676000000, "sha256": "3bfcd1e0175cdc265b02ab969ac2342bce3fcb74eecaf1f076d4da6872e461da" } },
+    { "rfilename": "qwen2.5-0.5b-instruct-q5_k_m.gguf", "size": 460000000, "lfs": { "size": 460000000, "sha256": "28b6a9e4ba6459282ed5e12058ea4dbb3b6594bb9df81f1374731ce16c5d9abe" } },
+    { "rfilename": "qwen2.5-0.5b-instruct-q4_k_m.gguf", "size": 397000000, "lfs": { "size": 397000000, "sha256": "624dbbe70ee7a92c65332caf3b3d7da7ec6a44eb223656fdf97e6dbe6d61333e" } },
+    { "rfilename": "qwen2.5-0.5b-instruct-q3_k_m.gguf", "size": 330000000, "lfs": { "size": 330000000, "sha256": "d867da23ae0bf07853c2b61b4f5a5aa09130e428285f51b68846d44232140a79" } },
+    { "rfilename": "qwen2.5-0.5b-instruct-q2_k.gguf", "size": 274000000, "lfs": { "size": 274000000, "sha256": "d05a9c07759212666ad31c634c7037d244459a5efc7bd1f21fffd3b5ee4b4bdc" } }
+  ]
+}
