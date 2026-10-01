@@ -18,13 +18,28 @@ final class HomeViewModel {
     var activeDownloadCount = 0
 
     private let profiler: DeviceProfiler = SystemDeviceProfiler()
-    // Task handles are bookkeeping, not UI state: @ObservationIgnored keeps
-    // them out of the @Observable macro (whose generated accessors reject
-    // nonisolated mutable storage), and nonisolated lets deinit cancel
-    // without violating MainActor isolation. Task.cancel() is thread-safe.
-    @ObservationIgnored private nonisolated var thermalTask: Task<Void, Never>?
-    @ObservationIgnored private nonisolated var benchmarkTask: Task<Void, Never>?
-    @ObservationIgnored private nonisolated var summaryTask: Task<Void, Never>?
+    // Task handles are bookkeeping, not UI state. Mutable stored properties
+    // on an @Observable class cannot be nonisolated (the macro's tracked
+    // accessors reject it, with or without @ObservationIgnored), so the
+    // handles live in an immutable box whose cancellation is thread-safe —
+    // Task.cancel() itself is documented thread-safe — letting deinit cancel
+    // without MainActor isolation.
+    private let tasks = TaskBox()
+
+    /// Mutable holder for the polling task handles; Sendable because
+    /// Task.cancel() is thread-safe and the slots are only written on the
+    /// MainActor (load/runBenchmark are MainActor-isolated).
+    private final class TaskBox: @unchecked Sendable {
+        var thermalTask: Task<Void, Never>?
+        var benchmarkTask: Task<Void, Never>?
+        var summaryTask: Task<Void, Never>?
+
+        func cancelAll() {
+            thermalTask?.cancel()
+            benchmarkTask?.cancel()
+            summaryTask?.cancel()
+        }
+    }
 
     func load() async {
         profile = await profiler.profile()
@@ -34,8 +49,8 @@ final class HomeViewModel {
     /// Poll the registry + download manager slowly; these counts change on
     /// the order of seconds at fastest.
     func startSummaryPolling(registry: ModelRegistry?, manager: DownloadManager?) {
-        guard summaryTask == nil else { return }
-        summaryTask = Task { [weak self] in
+        guard tasks.summaryTask == nil else { return }
+        tasks.summaryTask = Task { [weak self] in
             while !Task.isCancelled {
                 if let registry {
                     let models = registry.list()
@@ -57,7 +72,7 @@ final class HomeViewModel {
     func runBenchmark() {
         guard !isBenchmarking else { return }
         isBenchmarking = true
-        benchmarkTask = Task {
+        tasks.benchmarkTask = Task {
             let result = await DeviceBenchmark().run()
             guard !Task.isCancelled else {
                 await MainActor.run { isBenchmarking = false }
@@ -77,8 +92,8 @@ final class HomeViewModel {
     }
 
     private func startThermalMonitoring() {
-        guard thermalTask == nil else { return }
-        thermalTask = Task {
+        guard tasks.thermalTask == nil else { return }
+        tasks.thermalTask = Task {
             for await state in ThermalMonitor().states() {
                 guard !Task.isCancelled else { return }
                 await MainActor.run { thermalState = state }
@@ -87,9 +102,7 @@ final class HomeViewModel {
     }
 
     deinit {
-        thermalTask?.cancel()
-        benchmarkTask?.cancel()
-        summaryTask?.cancel()
+        tasks.cancelAll()
     }
 }
 
