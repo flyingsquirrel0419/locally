@@ -705,8 +705,9 @@ The `Locally` scheme's test action re-hosts every package test suite
 (LocallyCore/Device/HF/Compatibility/Storage/Runtime) as iOS
 `bundle.unit-test` targets, so `xcodebuild test` on the simulator runs the
 full library matrix, not just AppTests. `LocallyE2ETests` stays Linux-only:
-its fixtures bind the real HTTP stack to localhost, which the simulator
-sandbox does not permit. First simulator run surfaced one real platform
+it is gated on `LOCALLY_LIVE_E2E=1` and hits the live Hugging Face API, and
+it needs the Linux-linked llama.cpp build (.deps) — not meaningful in the
+simulator test run. First simulator run surfaced one real platform
 divergence Linux never caught: Compression's `compression_stream_process`
 can return OK with decoder output still pending after the input is drained,
 so `Inflater` re-pumps while the stream makes progress rather than only

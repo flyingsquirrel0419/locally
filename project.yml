@@ -104,8 +104,10 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
   # Package test suites re-hosted as iOS unit-test bundles so the full
   # library test matrix also runs on the simulator, not just AppTests.
-  # LocallyE2ETests stays Linux-only: its fixtures run the real HTTP stack
-  # against localhost, which the simulator sandbox does not permit.
+  # LocallyE2ETests stays Linux-only: it is gated on LOCALLY_LIVE_E2E=1 and
+  # hits the live Hugging Face API over FoundationURLSessionTransport, and it
+  # needs the Linux-linked llama.cpp build (.deps) — not meaningful in the
+  # simulator test run.
   LocallyCoreTests:
     type: bundle.unit-test
     platform: iOS
