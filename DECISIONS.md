@@ -696,3 +696,28 @@ load time was rejected: thermal state changes mid-generation.
 `sha256Hex`/`mapError`/`isAuthFailure`/`isNetworkish` moved into a
 `DownloadManager` extension in DownloadSupport.swift to bring the manager
 under the 500-line file limit (515 → 472). No behavior change.
+
+## CI bring-up
+
+### 2026-10-02 — Package tests run on the iOS simulator via xcodegen targets
+
+The `Locally` scheme's test action re-hosts every package test suite
+(LocallyCore/Device/HF/Compatibility/Storage/Runtime) as iOS
+`bundle.unit-test` targets, so `xcodebuild test` on the simulator runs the
+full library matrix, not just AppTests. `LocallyE2ETests` stays Linux-only:
+its fixtures bind the real HTTP stack to localhost, which the simulator
+sandbox does not permit. First simulator run surfaced one real platform
+divergence Linux never caught: Compression's `compression_stream_process`
+can return OK with decoder output still pending after the input is drained,
+so `Inflater` re-pumps while the stream makes progress rather than only
+while unconsumed input remains.
+
+**Test reporting uses an xcresult bundle, not log scraping.** The macOS job
+runs xcodebuild with `-resultBundlePath TestResults.xcresult` and a
+following `if: always()` step prints
+`xcrun xcresulttool get test-results summary` into the log and
+`$GITHUB_STEP_SUMMARY` (legacy JSON fallback for pre-Xcode-16) and uploads
+the bundle as an artifact — `-quiet` otherwise hides per-test counts.
+`IDEBuildingContinueBuildingAfterErrors` is set so one run reports errors
+from all targets; a failure-only step greps `error:` lines into the step
+summary. Neither weakens the gate: the job still fails on any test failure.
