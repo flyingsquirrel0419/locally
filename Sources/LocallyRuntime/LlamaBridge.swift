@@ -3,6 +3,11 @@ import LocallyCore
 
 #if canImport(CLlama)
 import CLlama
+#elseif canImport(llama)
+import llama
+#endif
+
+#if canImport(CLlama) || canImport(llama)
 
 /// Thin Swift wrapper over the llama.cpp C API (pinned tag: v0.5.0, see
 /// DEPENDENCIES.md). All decode work runs on this actor, off the main actor.

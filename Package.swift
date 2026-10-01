@@ -2,12 +2,14 @@
 import PackageDescription
 import Foundation
 
-// llama.cpp integration (see DEPENDENCIES.md). The C target wraps the
-// prebuilt library:
-//   - Apple: binary target with the official xcframework (Week 6 pin: v0.5.0).
+// llama.cpp integration (see DEPENDENCIES.md). Pinned to the v0.5.0 commit:
+//   - Apple: binary target with the official xcframework from release b11146,
+//     which is cut at exactly the v0.5.0 tag commit (the v0.5.0 GitHub
+//     release itself ships no xcframework asset).
 //   - Linux: systemLibrary pointing at .deps/llama-install, produced by
-//     scripts/build-llama-linux.sh. Plain `swift build` without the install
-//     works fine — the GGUF runtime then reports llama.cpp as not linked.
+//     scripts/build-llama-linux.sh (clones the v0.5.0 tag). Plain
+//     `swift build` without the install works fine — the GGUF runtime then
+//     reports llama.cpp as not linked.
 // LOCALLY_LLAMA=1 forces the Linux link even if the install dir is missing
 // (used in CI where the build step runs first).
 let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
@@ -64,6 +66,20 @@ if linuxLlamaAvailable {
         dependencies: ["LocallyCore", "LocallyLlama"]
     )
 }
+#else
+// Apple: official xcframework from the llama.cpp release whose commit is the
+// v0.5.0 tag (b11146). See DEPENDENCIES.md.
+targets.append(.binaryTarget(
+    name: "llama",
+    url: "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-xcframework.zip",
+    checksum: "1c306afe9fe68a90c4bdc74619d8558d6e0754f085deb105dd2d70293a9a964f"
+))
+targets.append(.target(name: "LocallyLlama", dependencies: ["llama"]))
+let runtimeIndex = targets.firstIndex { $0.name == "LocallyRuntime" }!
+targets[runtimeIndex] = .target(
+    name: "LocallyRuntime",
+    dependencies: ["LocallyCore", "LocallyLlama"]
+)
 #endif
 
 let package = Package(

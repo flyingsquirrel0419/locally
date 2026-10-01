@@ -53,7 +53,7 @@ final class ChatSessionTests: XCTestCase {
     }
 }
 
-#if canImport(CLlama)
+#if canImport(CLlama) || canImport(llama)
 final class PieceAssemblerTests: XCTestCase {
     func testSplitMultibyteCharacter() {
         var assembler = PieceAssembler()

@@ -44,7 +44,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
 
     /// `true` when the llama.cpp C library is linked into the process.
     public static var isLlamaLinked: Bool {
-        #if canImport(CLlama)
+        #if canImport(CLlama) || canImport(llama)
         return true
         #else
         return false
@@ -53,7 +53,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
 
     private let parser = GGUFParser()
 
-    #if canImport(CLlama)
+    #if canImport(CLlama) || canImport(llama)
     private let bridge = LlamaBridge()
     #endif
 
@@ -125,7 +125,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
         }
         let summary = GGUFModelSummary(header: header)
 
-        #if canImport(CLlama)
+        #if canImport(CLlama) || canImport(llama)
         let start = ContinuousClock.now
         try await bridge.loadModel(path: url.path)
         await state.store(summary, start.duration(to: .now).magnitudeSeconds)
@@ -137,7 +137,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     }
 
     public func unload() async {
-        #if canImport(CLlama)
+        #if canImport(CLlama) || canImport(llama)
         await bridge.unload()
         #endif
         await state.clear()
@@ -156,7 +156,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
 
     private func execute(request: AIRequest,
                          continuation: AsyncThrowingStream<AIEvent, Error>.Continuation) async {
-        #if canImport(CLlama)
+        #if canImport(CLlama) || canImport(llama)
         continuation.yield(.started(requestID: request.id))
         let start = ContinuousClock.now
         do {
