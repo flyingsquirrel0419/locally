@@ -53,4 +53,6 @@ jobs:
             -project Locally.xcodeproj \
             -scheme Locally \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
             -quiet

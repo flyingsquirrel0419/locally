@@ -10,6 +10,15 @@ settings:
 packages:
   Locally:
     path: .
+  mlx-swift-lm:
+    url: https://github.com/ml-explore/mlx-swift-lm
+    exactVersion: 3.31.4
+  mlx-swift:
+    url: https://github.com/ml-explore/mlx-swift
+    exactVersion: 0.31.4
+  swift-transformers:
+    url: https://github.com/huggingface/swift-transformers
+    exactVersion: 1.3.4
 targets:
   Locally:
     type: application
@@ -32,6 +41,16 @@ targets:
         product: LocallyStorage
       - package: Locally
         product: LocallyRuntime
+      - package: mlx-swift-lm
+        product: MLXLLM
+      - package: mlx-swift-lm
+        product: MLXLMCommon
+      - package: mlx-swift
+        product: MLX
+      - package: mlx-swift
+        product: MLXRandom
+      - package: swift-transformers
+        product: Tokenizers
     info:
       path: App/Info.plist
       properties:
