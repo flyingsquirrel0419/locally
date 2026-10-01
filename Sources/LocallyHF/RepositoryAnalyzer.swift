@@ -117,6 +117,13 @@ public struct RepositoryAnalyzer: Sendable {
         let ggufSummary = ggufHeader.map { GGUFModelSummary(header: $0) }
         let formats = detectFormats(siblings: siblings, libraryName: libraryName,
                                     config: config, tags: tags, repoOwner: reference.repoID.owner)
+        // Core ML diffusion repos (apple/coreml-stable-diffusion-*) ship
+        // either per-variant folders of compiled .mlmodelc trees or one zip
+        // per variant. Pick the iPhone-appropriate variant up front so file
+        // selection, memory estimates, and the runtime all agree.
+        let diffusionVariant = modality == .imageGeneration
+            ? pickCoreMLDiffusionVariant(siblings: siblings, repoName: reference.repoID.name)
+            : nil
         let quantization = detectQuantization(config: config, tags: tags,
                                               ggufVariant: ggufVariant,
                                               repoName: reference.repoID.name)
@@ -127,11 +134,17 @@ public struct RepositoryAnalyzer: Sendable {
         let context = config?.maxPositionEmbeddings
             ?? configs["generation_config.json"]?.maxPositionEmbeddings
             ?? ggufSummary?.contextLength
-        let hints = architectureHints(from: config)
+        var hints = architectureHints(from: config)
             ?? ggufHeader.map { ArchitectureHints(ggufMetadata: Self.ggufMetadataDictionary($0)) }
+        if let variant = diffusionVariant {
+            var h = hints ?? ArchitectureHints()
+            h.diffusionResolution = variant.resolution
+            hints = h
+        }
 
         let required = selectRequiredFiles(siblings: siblings, ggufVariant: ggufVariant,
-                                           formats: formats)
+                                           formats: formats,
+                                           diffusionVariant: diffusionVariant)
         let totalSize = required.reduce(Int64(0)) { $0 + $1.size }
         let weightMemory = estimateWeightMemory(parameters: parameters, quantization: quantization,
                                                 requiredSize: required.isEmpty ? nil : totalSize)
@@ -159,6 +172,20 @@ public struct RepositoryAnalyzer: Sendable {
             if summary.chatTemplate != nil { metadata["chat_template"] = "gguf" }
             if let arch = summary.architecture { metadata["gguf_architecture"] = arch }
         }
+        if let variant = diffusionVariant {
+            metadata["diffusion_attention"] = variant.attention
+            metadata["diffusion_form"] = variant.form == .archive ? "zip" : "folder"
+            metadata["diffusion_palettized"] = variant.palettized ? "true" : "false"
+            metadata["diffusion_resources_dir"] = variant.resourceDirectory
+            if let resolution = variant.resolution {
+                metadata["diffusion_resolution"] = String(resolution)
+            }
+        } else if modality == .imageGeneration, formats.contains(.coreml) == false {
+            // Honest dead end: a diffusers-style repo (safetensors UNet)
+            // cannot run until someone converts it to Core ML.
+            metadata["unsupported_reason"] =
+                "Needs Core ML conversion: this repository ships PyTorch/safetensors diffusion weights, not compiled .mlmodelc resources"
+        }
 
         return ModelDescriptor(
             repoID: reference.repoID.description,
@@ -173,7 +200,8 @@ public struct RepositoryAnalyzer: Sendable {
             estimatedWeightMemory: weightMemory,
             estimatedRuntimeMemory: nil,
             supportedRuntimes: runtimes(for: formats, modality: modality,
-                                        requiresRemoteCode: config?.requiresRemoteCode == true),
+                                        requiresRemoteCode: config?.requiresRemoteCode == true,
+                                        hasRunnableDiffusionVariant: diffusionVariant != nil),
             contextLength: context,
             architectureHints: hints,
             metadata: metadata
@@ -317,7 +345,12 @@ public struct RepositoryAnalyzer: Sendable {
             formats.append(.mlx)
         }
         if names.contains(where: { $0.hasSuffix(".gguf") }) { formats.append(.gguf) }
-        if names.contains(where: { $0.hasSuffix(".mlpackage") || $0.hasSuffix(".mlmodelc") }) {
+        // Compiled Core ML: direct .mlmodelc trees, or the Core ML
+        // diffusion convention of one "<variant>_compiled.zip" archive
+        // whose contents are .mlmodelc folders.
+        if names.contains(where: { $0.hasSuffix(".mlpackage") || $0.hasSuffix(".mlmodelc") })
+            || (tagSet.contains("coreml")
+                && names.contains { $0.hasSuffix("compiled.zip") || $0.contains(".mlmodelc/") }) {
             formats.append(.coreml)
         }
         if names.contains(where: { $0.hasSuffix(".onnx") }) { formats.append(.onnx) }
@@ -472,9 +505,33 @@ public struct RepositoryAnalyzer: Sendable {
     /// duplicates when safetensors exist, alternative framework formats, and
     /// docs/images.
     func selectRequiredFiles(siblings: [HFSibling], ggufVariant: HFSibling?,
-                             formats: [ModelFormat]) -> [RemoteModelFile] {
+                             formats: [ModelFormat],
+                             diffusionVariant: CoreMLDiffusionVariant? = nil) -> [RemoteModelFile] {
         let hasGGUF = formats.contains(.gguf)
         let hasSafetensors = formats.contains(.safetensors) || formats.contains(.mlx)
+
+        // Core ML diffusion: exactly one variant — the archive (or folder)
+        // contents — plus the top-level tokenizer files the pipeline loads.
+        if let variant = diffusionVariant {
+            return siblings.compactMap { sibling in
+                let path = sibling.rfilename
+                let lower = path.lowercased()
+                if lower.hasPrefix(".git") { return nil }
+                if Self.isNonRuntimeFile(lower) { return nil }
+                let included: Bool
+                switch variant.form {
+                case .archive:
+                    included = path == variant.archiveFile?.rfilename
+                        || path == "vocab.json" || path == "merges.txt"
+                case .folder:
+                    included = path.hasPrefix(variant.resourceDirectory + "/")
+                        || path == "vocab.json" || path == "merges.txt"
+                }
+                guard included else { return nil }
+                let size = sibling.lfs?.size ?? sibling.size ?? 0
+                return RemoteModelFile(path: path, size: size, sha256: sibling.lfs?.sha256)
+            }
+        }
 
         return siblings.compactMap { sibling in
             let path = sibling.rfilename
@@ -544,12 +601,14 @@ public struct RepositoryAnalyzer: Sendable {
     }
 
     func runtimes(for formats: [ModelFormat], modality: ModelModality,
-                  requiresRemoteCode: Bool) -> [RuntimeKind] {
+                  requiresRemoteCode: Bool,
+                  hasRunnableDiffusionVariant: Bool = false) -> [RuntimeKind] {
         guard !requiresRemoteCode else { return [] }
         switch modality {
         case .decision: return [.decision]
-        case .imageGeneration: return formats.contains(.coreml) || formats.contains(.safetensors)
-            ? [.diffusion] : []
+        // Only Core ML diffusion variants actually run; safetensors-only
+        // diffusion repos are declared unsupported (see metadata).
+        case .imageGeneration: return hasRunnableDiffusionVariant ? [.diffusion] : []
         case .speechRecognition, .speechSynthesis, .audio: return [.audio]
         case .videoUnderstanding, .videoGeneration: return [.video]
         default:
@@ -558,6 +617,97 @@ public struct RepositoryAnalyzer: Sendable {
             if formats.contains(.coreml) { return [.coreml] }
             return []
         }
+    }
+
+    // MARK: - Core ML diffusion variant selection
+
+    /// One runnable variant of a Core ML diffusion repo: either a folder of
+    /// compiled .mlmodelc trees or a zip archive containing them.
+    struct CoreMLDiffusionVariant: Sendable {
+        enum Form: Sendable { case folder, archive }
+        /// "split_einsum" or "original".
+        var attention: String
+        var form: Form
+        var palettized: Bool
+        /// Repo-relative directory the pipeline loads from (the folder
+        /// itself, or the archive's stem — extraction lands next to the zip).
+        var resourceDirectory: String
+        /// The zip file when the variant ships as an archive.
+        var archiveFile: HFSibling?
+        /// Fixed output resolution: SDXL models are 1024, SD 1.x/2.x 512.
+        var resolution: Int?
+    }
+
+    /// Pick the iPhone variant of a Core ML diffusion repo. Apple's layout
+    /// (verified against apple/coreml-stable-diffusion-2-1-base-palettized):
+    /// `<variant>/compiled/*.mlmodelc` folders plus `<variant>/packages`,
+    /// and one `<repo>_<variant>_compiled.zip` per variant. split_einsum is
+    /// required for Neural Engine execution (original attention needs a
+    /// GPU); palettized is smaller; archives are preferred when both exist
+    /// because the install pipeline extracts them atomically.
+    func pickCoreMLDiffusionVariant(siblings: [HFSibling], repoName: String) -> CoreMLDiffusionVariant? {
+        let lower = repoName.lowercased()
+        let isXL = lower.contains("xl")
+        let resolution = isXL ? 1024 : 512
+
+        struct Candidate {
+            var attention: String
+            var palettized: Bool
+            var archive: HFSibling?
+            var folderPrefix: String?
+            var score: Int
+        }
+        var candidates: [Candidate] = []
+
+        // Archives: "<name>_<variant>_compiled.zip" or "<variant>_compiled.zip"
+        for sibling in siblings where sibling.rfilename.lowercased().hasSuffix(".zip") {
+            let base = sibling.rfilename.lowercased()
+            guard base.contains("compiled") else { continue }
+            let attention: String
+            if base.contains("split_einsum") { attention = "split_einsum" }
+            else if base.contains("original") { attention = "original" }
+            else { continue }
+            let palettized = base.contains("palettized") || lower.contains("palettized")
+            // split_einsum strongly preferred on iPhone; archives preferred.
+            var score = attention == "split_einsum" ? 100 : 0
+            if palettized { score += 10 }
+            candidates.append(Candidate(
+                attention: attention, palettized: palettized, archive: sibling,
+                folderPrefix: nil, score: score))
+        }
+
+        // Folders: "<variant>/compiled/TextEncoder.mlmodelc/..." trees.
+        let folderPrefixes = Set(siblings.compactMap { sibling -> String? in
+            let path = sibling.rfilename
+            guard path.lowercased().contains(".mlmodelc/") else { return nil }
+            let parts = path.split(separator: "/").map(String.init)
+            guard parts.count >= 3, parts[1].lowercased() == "compiled" else { return nil }
+            return parts[0]
+        })
+        for prefix in folderPrefixes {
+            let p = prefix.lowercased()
+            let attention = p.contains("split_einsum") ? "split_einsum"
+                : p.contains("original") ? "original" : "split_einsum"
+            let palettized = p.contains("palettized") || lower.contains("palettized")
+            var score = attention == "split_einsum" ? 90 : -10
+            if palettized { score += 10 }
+            candidates.append(Candidate(
+                attention: attention, palettized: palettized, archive: nil,
+                folderPrefix: "\(prefix)/compiled", score: score))
+        }
+
+        guard let best = candidates.max(by: { $0.score < $1.score }) else { return nil }
+        if let archive = best.archive {
+            let stem = archive.rfilename.hasSuffix(".zip")
+                ? String(archive.rfilename.dropLast(4)) : archive.rfilename
+            return CoreMLDiffusionVariant(
+                attention: best.attention, form: .archive, palettized: best.palettized,
+                resourceDirectory: stem, archiveFile: archive, resolution: resolution)
+        }
+        guard let prefix = best.folderPrefix else { return nil }
+        return CoreMLDiffusionVariant(
+            attention: best.attention, form: .folder, palettized: best.palettized,
+            resourceDirectory: prefix, archiveFile: nil, resolution: resolution)
     }
 }
 

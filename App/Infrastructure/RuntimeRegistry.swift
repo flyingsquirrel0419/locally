@@ -24,7 +24,7 @@ final class RuntimeRegistry {
     private(set) var loadedRepoID: String?
 
     init(runtimes: [any ModelCompatibleRuntime]? = nil) {
-        let runtimes = runtimes ?? [GGUFRuntime(), MLXRuntime(), VLMRuntime(),
+        let runtimes = runtimes ?? [GGUFRuntime(), MLXRuntime(), VLMRuntime(), DiffusionRuntime(),
                                     ExperimentalVideoGenerationRuntime()]
         self.runtimes = runtimes
         self.router = RuntimeRouter(runtimes: runtimes)

@@ -19,6 +19,9 @@ packages:
   swift-transformers:
     url: https://github.com/huggingface/swift-transformers
     exactVersion: 1.3.4
+  ml-stable-diffusion:
+    url: https://github.com/apple/ml-stable-diffusion
+    revision: ea2805dc1945be20561c77e5f6d1d9a5a637cda2
 targets:
   Locally:
     type: application
@@ -53,6 +56,8 @@ targets:
       product: Tokenizers
     - package: mlx-swift-lm
       product: MLXVLM
+    - package: ml-stable-diffusion
+      product: StableDiffusion
     info:
       path: App/Info.plist
       properties:
