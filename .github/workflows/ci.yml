@@ -15,10 +15,25 @@ jobs:
     container: swift:6.1
     steps:
       - uses: actions/checkout@v4
+      - name: Install cmake
+        run: apt-get update && apt-get install -y --no-install-recommends cmake
+      - name: Cache llama.cpp build
+        uses: actions/cache@v4
+        with:
+          path: |
+            .deps/llama-install
+            .deps/llama-build
+          key: llama-v0.5.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Build llama.cpp
+        run: scripts/build-llama-linux.sh
       - name: Build
         run: swift build -j 2
+        env:
+          LOCALLY_LLAMA: "1"
       - name: Test
         run: swift test -j 2
+        env:
+          LOCALLY_LLAMA: "1"
 
   macos:
     runs-on: macos-15

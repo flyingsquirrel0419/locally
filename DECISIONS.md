@@ -236,3 +236,76 @@ behaves identically at limit 1 and 2. Live verification scripts therefore
 pass `concurrentFileLimit: 1` on Linux; the iOS background transport
 (UIURLSession background session) is unaffected. Production default stays
 2, since the shipping platform is iOS.
+
+## Week 6
+
+### 2026-10-01 — GGUF runtime on llama.cpp, pinned to the v0.5.0 commit
+
+**Pin.** llama.cpp is pinned to tag `v0.5.0` (commit
+`7fe450e19305b828c199d602c23a8337aaa1f03b`, 2026-09-23). The v0.5.0 GitHub
+release ships no xcframework asset; continuous-delivery release `b11146` is
+cut at exactly that commit, so the Apple binary target uses
+`llama-b11146-xcframework.zip` and both platforms run bit-identical source.
+Checksum is recorded in DEPENDENCIES.md and verified by SwiftPM on fetch.
+
+**Linux link is opt-in at manifest time.** Package.swift adds the
+`CLlama`/`LocallyLlama` targets only when `LOCALLY_LLAMA=1` or
+`.deps/llama-install/include/llama.h` exists, evaluated from an absolute
+path anchored at `#filePath` — relative paths in the manifest resolve
+against an unreliable CWD and the result is cached in
+`~/.cache/org.swift.swiftpm/manifests` (a stale cache once masked a broken
+check; clear it when debugging manifest conditionals). Plain
+`swift build` on Linux without llama still succeeds, and `GGUFRuntime`
+honestly reports "llama.cpp is not linked into this build".
+
+**Header delivery via symlink.** The CLlama systemLibrary target keeps its
+modulemap at the target root and a gitignored symlink
+`Sources/CLlama/include -> ../../.deps/llama-install/include`, created (and
+re-created on every run, before the early exit) by
+`scripts/build-llama-linux.sh`. This avoids `-I` unsafeFlags entirely, which
+matter because cSettings do not propagate to dependent targets (the test
+target compiles bridge sources transitively).
+
+**C API surface.** The bridge uses the current v0.5.0 API:
+`llama_model_load_from_file`, `llama_init_from_model`,
+`llama_model_get_vocab`, `llama_chat_apply_template` (two-pass),
+`llama_sampler_chain_*` (top-k → top-p → temp → dist; greedy when temp ≤ 0),
+`llama_memory_seq_pos_max` for used-context accounting. Deprecated entry
+points (`llama_load_model_from_file`, `llama_new_context_with_model`,
+`llama_get_kv_cache_*`) are not used. GPU offload is `-1` (all layers) on
+Apple where the xcframework includes Metal, `0` on the CPU-only Linux build.
+
+**Chat templates: three tiers.** Rendering prefers (1) llama.cpp's own
+`llama_chat_apply_template` with the model's embedded template, then (2) a
+small Swift renderer for the common Jinja subset (a single
+`{% for message in messages %}` loop with `if/else` branches on role and
+`add_generation_prompt`), then (3) a ChatML fallback. The Swift renderer
+returns nil rather than guessing when the template uses constructs outside
+the subset (multiple loops, filters, macros); depth-aware if/endif scanning
+handles nested conditionals.
+
+**Streaming is UTF-8 safe.** llama token pieces can split multi-byte
+sequences across tokens; `PieceAssembler` buffers raw bytes and emits only
+the longest valid-UTF-8 prefix that does not end inside a multibyte
+sequence, flushing the remainder at end of stream. Cancellation is polled
+via `Task.isCancelled` once per generated token and tears down the context
+before finishing the stream.
+
+**Context overflow policy.** If the rendered prompt alone fills the window,
+inference fails with a clear error; otherwise the generation budget is
+truncated to `min(maxTokens, nCtx - promptTokens)` rather than silently
+shifting the KV cache, so early turns are never dropped without the caller
+knowing.
+
+**GGUFParser treats files as hostile.** All reads are bounds-checked, no
+mmap; string length ≤ 16 MB, array length ≤ 10 M, tensor/KV counts ≤ 1 M,
+header ≤ 256 MB. Fixed-size array element counts are checked against
+remaining bytes *before* allocation so a forged count cannot OOM. Bool
+bytes > 1 and nested arrays are rejected. Tests truncate a valid file at
+every byte offset and assert a thrown error, never a crash.
+
+**Playground is honest by construction.** Non-text modalities render a
+"Not yet supported" state; an unroutable model shows the router's
+unsupported reason; a risky rating shows the warning and requires an
+explicit "Try Anyway". The metrics footer displays only values measured by
+the runtime (load time, TTFT, tok/s, token count) — nil renders as "–".
