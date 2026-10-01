@@ -41,7 +41,9 @@ final class LiveLlamaTests: XCTestCase {
             parameters: GenerationParameters(temperature: 0, topP: 1.0, maxTokens: 32))
         var streamed = ""
         var result: AIResult?
+        var events: [AIEvent] = []
         for try await event in runtime.run(request) {
+            events.append(event)
             switch event {
             case .token(let t): streamed += t
             case .completed(let r): result = r
@@ -49,6 +51,7 @@ final class LiveLlamaTests: XCTestCase {
             default: break
             }
         }
+        TerminalEventInvariant.assertExactlyOneTerminalEvent(events)
         let output = result?.text ?? streamed
         XCTAssertFalse(output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertNotNil(result?.metadata.tokensPerSecond)
@@ -141,10 +144,13 @@ final class LiveLlamaTests: XCTestCase {
                                              contextLength: 1024))
         var result: AIResult?
         var failed: LocallyError?
+        var events: [AIEvent] = []
         for try await event in runtime.run(request) {
+            events.append(event)
             if case .completed(let r) = event { result = r }
             if case .failed(let e) = event { failed = e }
         }
+        TerminalEventInvariant.assertExactlyOneTerminalEvent(events)
         if let failed { XCTFail("inference failed: \(failed.technicalDetail)") }
         let tokens = result?.metadata.generatedTokens ?? 0
         XCTAssertGreaterThan(tokens, 200, "expected ~256 tokens, got \(tokens)")
@@ -170,11 +176,14 @@ final class LiveLlamaTests: XCTestCase {
             parameters: GenerationParameters(temperature: 0, maxTokens: 32, contextLength: 128))
         var sawContextOverflow = false
         var sawOtherFailure: LocallyError?
+        var overflowEvents: [AIEvent] = []
         for try await event in runtime.run(request) {
+            overflowEvents.append(event)
             if case .failed(let e) = event {
                 if case .contextOverflow = e { sawContextOverflow = true } else { sawOtherFailure = e }
             }
         }
+        TerminalEventInvariant.assertExactlyOneTerminalEvent(overflowEvents)
         XCTAssertTrue(sawContextOverflow,
                       "expected contextOverflow, got \(String(describing: sawOtherFailure))")
     }

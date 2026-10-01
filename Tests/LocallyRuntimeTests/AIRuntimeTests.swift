@@ -34,10 +34,7 @@ final class UnsupportedRuntimeTests: XCTestCase {
     func testRunYieldsFailureEvent() async throws {
         let runtime = UnsupportedRuntime(kind: .coreml, reason: "not built")
         let request = AIRequest(model: model, input: .text("hi"))
-        var events: [AIEvent] = []
-        for try await event in runtime.run(request) {
-            events.append(event)
-        }
+        let events = await TerminalEventInvariant.assertStream(runtime.run(request))
         XCTAssertEqual(events.count, 1)
         guard case .failed(let error) = events.first,
               case .runtimeUnavailable = error else {

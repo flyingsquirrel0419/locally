@@ -4,8 +4,9 @@ import LocallyCore
 /// Decision runtime: answers a set of typed questions about a state document
 /// using an underlying text-capable backend. Input arrives as
 /// `AIInput.json` carrying the decision schema document (`state` +
-/// `questions`). Emits one `.decision` artifact per question, then
-/// `.completed`.
+/// `questions`). Emits one `.decision` event per question as it is answered,
+/// then exactly one terminal event: `.completed` with all results, or
+/// `.failed`.
 public final class DecisionRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     public let kind: RuntimeKind = .decision
 
@@ -20,11 +21,16 @@ public final class DecisionRuntime: ModelCompatibleRuntime, @unchecked Sendable 
         self.textRuntime = textRuntime
     }
 
-    /// Convenience: wrap an existing text runtime (e.g. GGUFRuntime) so
-    /// decisions run via the generation path today.
+    /// Convenience: wrap an existing text runtime (e.g. GGUFRuntime). When
+    /// the runtime exposes a `TokenScoringBackend` (llama.cpp does), the
+    /// engine prefers calibrated scoring; otherwise it falls back to
+    /// generation with schema validation.
     public convenience init(wrapping textRuntime: any AIRuntime, model: ModelDescriptor) {
         let adapter = GenerationBackendAdapter(runtime: textRuntime, model: model)
-        self.init(engine: DecisionEngine(generationBackend: adapter), textRuntime: textRuntime)
+        let scoring = (textRuntime as? GGUFRuntime)?.makeScoringBackend()
+        self.init(
+            engine: DecisionEngine(scoringBackend: scoring, generationBackend: adapter),
+            textRuntime: textRuntime)
     }
 
     /// Whether a question will be answered by scoring or generation with the
@@ -138,8 +144,9 @@ public final class DecisionRuntime: ModelCompatibleRuntime, @unchecked Sendable 
         }
 
         var results: [DecisionResult] = []
-        var firstTokenTime: TimeInterval?
+        var firstAnswerTime: TimeInterval?
         do {
+            continuation.yield(.preparing("decisions"))
             for question in schema.questions {
                 if Task.isCancelled {
                     continuation.yield(.failed(.cancelled))
@@ -147,14 +154,11 @@ public final class DecisionRuntime: ModelCompatibleRuntime, @unchecked Sendable 
                     return
                 }
                 let result = try await engine.answer(question: question, schema: schema)
-                if firstTokenTime == nil {
-                    firstTokenTime = start.duration(to: .now).magnitudeSeconds
+                if firstAnswerTime == nil {
+                    firstAnswerTime = start.duration(to: .now).magnitudeSeconds
                 }
                 results.append(result)
-                continuation.yield(.completed(result: AIResult(
-                    requestID: request.id,
-                    artifacts: [.decision(result)],
-                    metadata: InferenceMetadata(ttft: firstTokenTime))))
+                continuation.yield(.decision(result))
             }
         } catch let error as DecisionError {
             let locally = error.locallyError
@@ -170,7 +174,7 @@ public final class DecisionRuntime: ModelCompatibleRuntime, @unchecked Sendable 
         }
 
         let metadata = InferenceMetadata(
-            ttft: firstTokenTime ?? start.duration(to: .now).magnitudeSeconds)
+            ttft: firstAnswerTime ?? start.duration(to: .now).magnitudeSeconds)
         continuation.yield(.completed(result: AIResult(
             requestID: request.id,
             artifacts: results.map { .decision($0) },

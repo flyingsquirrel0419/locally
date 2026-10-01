@@ -1,15 +1,38 @@
 import Foundation
 
 /// Streaming events emitted by a runtime while handling a request.
+///
+/// Stream contract: a run yields `.started`, then any number of progress /
+/// content events, then EXACTLY ONE terminal event — `.completed` or
+/// `.failed` — after which the stream finishes. Consumers can rely on no
+/// events arriving after the terminal one; tests assert this invariant via
+/// `assertExactlyOneTerminalEvent` in LocallyRuntimeTests.
 public enum AIEvent: Sendable, Hashable {
     case started(requestID: UUID)
+    /// The runtime is working on a non-streaming step (prompt load, model
+    /// warmup). `phase` is a short machine-readable label.
+    case preparing(String /* phase */)
+    case progress(Double, phase: String?)
     case token(String)
     case partialText(String)
-    case progress(Double)
     case image(Data)
     case audio(Data)
+    /// One answered decision question. The decision runtime emits one per
+    /// question, followed by a single terminal `.completed`.
+    case decision(DecisionResult)
+    /// Intermediate performance counters; the terminal `.completed` result
+    /// also carries the final metadata.
+    case metadata(InferenceMetadata)
     case completed(result: AIResult)
     case failed(LocallyError)
+
+    /// `true` for the events that end a stream (`.completed` / `.failed`).
+    public var isTerminal: Bool {
+        switch self {
+        case .completed, .failed: return true
+        default: return false
+        }
+    }
 }
 
 /// Final output of a completed request.

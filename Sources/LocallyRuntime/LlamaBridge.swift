@@ -304,6 +304,95 @@ actor LlamaBridge {
         return Int(llama_memory_seq_pos_max(llama_get_memory(context), 0)) + 1
     }
 
+    // MARK: - Token scoring
+
+    /// Sum of token log-probabilities for each candidate continuation given
+    /// the prompt, aligned with `candidates` order. The prompt is decoded
+    /// once; each candidate's tokens are appended, scored against the cached
+    /// prefix, then removed from the KV cache (llama_memory_seq_rm), so N
+    /// candidates cost 1 prompt decode + N short decodes instead of N full
+    /// re-decodes. Measured on SmolLM2-135M (Linux CPU): ~4x faster than
+    /// re-decoding prompt+candidate per candidate (see DECISIONS.md).
+    ///
+    /// Scoring uses a numerically stable log-softmax over the full vocab
+    /// (llama_get_logits_ith), so returned values are true log-probabilities,
+    /// comparable across candidates of different token lengths.
+    ///
+    /// Requires an active context (beginContext); the context is left holding
+    /// the decoded prompt afterwards.
+    func scoreCandidates(prompt: String, candidates: [String]) throws -> [Double] {
+        guard let context, let vocab else {
+            throw LocallyError.runtimeUnavailable(
+                userMessage: "No context is active.",
+                technicalDetail: "scoreCandidates without beginContext")
+        }
+        let memory = llama_get_memory(context)
+        let nVocab = Int(llama_vocab_n_tokens(vocab))
+
+        let promptTokens = try tokenize(prompt, addSpecial: true)
+        try decode(tokens: promptTokens)
+        let promptEnd = Int32(promptTokens.count)
+
+        var results: [Double] = []
+        results.reserveCapacity(candidates.count)
+        for candidate in candidates {
+            // BPE tokenizers encode a word following a space differently, and
+            // the rendered prompt ends right where the answer starts; score
+            // the candidate with a leading space so it matches how the model
+            // would continue the text.
+            let continuation = candidate.hasPrefix(" ") || candidate.isEmpty
+                ? candidate : " \(candidate)"
+            let tokens = try tokenize(continuation, addSpecial: false)
+            guard !tokens.isEmpty else {
+                results.append(-.infinity)
+                continue
+            }
+            var logProb = 0.0
+            var failed = false
+            for token in tokens {
+                // Logits for the next token come from the last decoded
+                // position (index -1 per the llama.cpp batch contract).
+                guard let logits = llama_get_logits_ith(context, -1) else {
+                    failed = true
+                    break
+                }
+                logProb += Self.logSoftmax(logits: logits, count: nVocab,
+                                           token: Int(token))
+                var single: [llama_token] = [token]
+                let rc = single.withUnsafeMutableBufferPointer { buf in
+                    llama_decode(context, llama_batch_get_one(buf.baseAddress, 1))
+                }
+                if rc != 0 { failed = true; break }
+            }
+            // Roll the KV cache back to the prompt for the next candidate.
+            _ = llama_memory_seq_rm(memory, 0, promptEnd, -1)
+            if failed {
+                throw LocallyError.inferenceFailed(
+                    userMessage: "Scoring failed while reading the model's output.",
+                    technicalDetail: "llama scoring decode failed mid-candidate")
+            }
+            results.append(logProb)
+        }
+        return results
+    }
+
+    /// log softmax over the vocab for one token, computed with the max-shift
+    /// trick so no intermediate can overflow to +inf.
+    static func logSoftmax(logits: UnsafePointer<Float>, count: Int, token: Int) -> Double {
+        guard token >= 0, token < count else { return -.infinity }
+        var maxLogit = -Float.infinity
+        for i in 0..<count {
+            let value = logits[i]
+            if value > maxLogit { maxLogit = value }
+        }
+        guard maxLogit.isFinite else { return -.infinity }
+        var sum = 0.0
+        for i in 0..<count {
+            sum += exp(Double(logits[i] - maxLogit))
+        }
+        return Double(logits[token] - maxLogit) - log(sum)
+    }
+
     /// Approximate process resident memory in bytes. llama.cpp does not
     /// expose a per-model memory counter through the C API, so this samples
     /// process-level RSS (Linux /proc/self/statm) or physical footprint
