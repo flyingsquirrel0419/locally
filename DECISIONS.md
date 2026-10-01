@@ -357,3 +357,49 @@ diffusion 400–800 MB, video 0.5–1 GB). VLMs add the vision encoder tower
 latent/VAE/UNet buffers at 1024²; video adds frames × frame buffers.
 A 10–15% safety margin sits on top. Unknown inputs widen the range and
 drop confidence to .low — never silently zero.
+
+## Week 10
+
+### 2026-10-01 — Decision runtime: calibrated scoring first, validated generation as fallback
+
+Decision questions (choice/boolean/probability/noul/score/ranking) are
+answered by token log-probability scoring whenever a `TokenScoringBackend`
+is wired: softmax over candidate continuations gives a real distribution,
+boolean/probability is P(yes)/(P(yes)+P(no)), integer score is the
+expectation over the numeric candidates, ranking is per-item relevance
+softmax. Free-text generation (`TextGenerationBackend`) is the fallback and
+the only path for `structured` output: the model must emit a JSON object
+whose value at the question key passes the same validator the UI uses; one
+retry appends the validation error to the prompt; anything still invalid
+becomes a DecisionError with a user-facing message. Generated answers never
+carry probabilities — they are not calibrated, and faking confidence would
+violate the no-fake-results rule. `GenerationBackendAdapter` adapts any
+existing AIRuntime text runtime, so GGUF works today; a native llama.cpp
+scoring backend plugs into `TokenScoringBackend` without engine changes.
+
+### 2026-10-01 — Noul is a band-mapped ordinal scale
+
+"Noul" = calibrated probability of yes expressed with a label. Five levels
+(no/unlikely/unsure/likely/yes) partition [0,1] into equal bands with
+centers 0.1/0.3/0.5/0.7/0.9; three levels (no/unsure/yes) use centers
+1/6/1/2/5/6. The scored path reports both the argmax label and the
+distribution-weighted expected probability of yes (`_probabilityOfYes` key
+in the result's probability table, underscore-prefixed so it never collides
+with a candidate label).
+
+### 2026-10-01 — Structured output accepts only a JSON-Schema subset
+
+Supported keywords: type (object/array/string/number/integer/boolean/null),
+properties, required, enum, min/max (+minimum/maximum aliases),
+minLength/maxLength, minItems/maxItems, items. Anything else (pattern,
+format, $ref, additionalProperties, …) is rejected at parse time with a
+path-specific error rather than silently ignored, because partial
+enforcement would let users trust constraints the runtime never checks.
+
+### 2026-10-01 — DecisionResult extended additively; rawText is debug-only
+
+LocallyCore's placeholder DecisionResult gained type/probabilities/method/
+rawText fields (all optional, defaulted) so existing constructors keep
+compiling. `rawText` carries the model's raw output for debugging and is
+never passed to Log — model output is user content and the logging rule
+forbids it.
