@@ -1,0 +1,186 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "chat.clear": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Clear conversation"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "대화 지우기"}}
+      }
+    },
+    "chat.controls": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Generation controls"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "생성 설정"}}
+      }
+    },
+    "chat.empty": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Send a message to start chatting with this model."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "메시지를 보내 이 모델과 대화를 시작하세요."}}
+      }
+    },
+    "chat.input.placeholder": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Message"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "메시지"}}
+      }
+    },
+    "chat.message.assistant": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Assistant"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "어시스턴트"}}
+      }
+    },
+    "chat.message.you": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "You"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "나"}}
+      }
+    },
+    "chat.send": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Send"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "보내기"}}
+      }
+    },
+    "chat.stop": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Stop"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "중지"}}
+      }
+    },
+    "controls.context": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Context Length"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "컨텍스트 길이"}}
+      }
+    },
+    "controls.done": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Done"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "완료"}}
+      }
+    },
+    "controls.limits": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Limits"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "제한"}}
+      }
+    },
+    "controls.maxTokens": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Max Tokens"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "최대 토큰"}}
+      }
+    },
+    "controls.sampling": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Sampling"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "샘플링"}}
+      }
+    },
+    "controls.systemPrompt": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "System Prompt"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "시스템 프롬프트"}}
+      }
+    },
+    "controls.temperature": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Temperature"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "온도"}}
+      }
+    },
+    "controls.title": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Generation"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "생성 설정"}}
+      }
+    },
+    "controls.topK": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Top-k"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "Top-k"}}
+      }
+    },
+    "controls.topP": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Top-p"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "Top-p"}}
+      }
+    },
+    "metrics.load": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Load"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "로드"}}
+      }
+    },
+    "metrics.tokens": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Tokens"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "토큰"}}
+      }
+    },
+    "metrics.toks": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "tok/s"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "토큰/초"}}
+      }
+    },
+    "metrics.ttft": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "TTFT"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "TTFT"}}
+      }
+    },
+    "playground.empty.description": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Pick a downloaded model to try it here. Model selection arrives with the Models tab integration."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "다운로드한 모델을 선택해 여기에서 사용해 보세요. 모델 선택은 모델 탭 연동과 함께 제공됩니다."}}
+      }
+    },
+    "playground.empty.title": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "No Model Selected"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "선택된 모델 없음"}}
+      }
+    },
+    "playground.risky.title": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Compatibility Unknown"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "호환성 미확인"}}
+      }
+    },
+    "playground.risky.tryAnyway": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Try Anyway"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "그래도 시도"}}
+      }
+    },
+    "playground.unavailable.title": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Model Unavailable"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "모델 사용 불가"}}
+      }
+    },
+    "playground.unsupportedModality.description": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "The playground currently supports text models only. This model type isn't supported yet."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "플레이그라운드는 현재 텍스트 모델만 지원합니다. 이 모델 유형은 아직 지원되지 않습니다."}}
+      }
+    },
+    "playground.unsupportedModality.title": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Not Yet Supported"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "아직 지원되지 않음"}}
+      }
+    },
+    "tab.playground": {
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Playground"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "플레이그라운드"}}
+      }
+    }
+  },
+  "version": "1.0"
+}
