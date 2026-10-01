@@ -53,6 +53,13 @@ var targets: [Target] = [
     ),
     .testTarget(name: "LocallyStorageTests", dependencies: ["LocallyStorage", "LocallyCore"]),
     .testTarget(name: "LocallyRuntimeTests", dependencies: ["LocallyRuntime", "LocallyCore"]),
+    .testTarget(
+        name: "LocallyE2ETests",
+        dependencies: [
+            "LocallyCore", "LocallyHF", "LocallyDevice",
+            "LocallyCompatibility", "LocallyStorage", "LocallyRuntime",
+        ]
+    ),
 ]
 
 #if os(Linux)

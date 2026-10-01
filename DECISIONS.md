@@ -644,3 +644,36 @@ Locally → mlx-swift-lm 3.31.4 → mlx-swift upToNextMinor(0.31.4) [pin
 2.4.2..<3.0.0, swift-huggingface 0.8.1..<0.9.0, swift-collections 1.x,
 swift-crypto 3.0.0..<5.0.0, yyjson exact 0.12.0. No shared dependency,
 no conflict.
+
+## Week 12b
+
+**Trailing progress events during `.verifying` are dropped.** URLSession (and
+any transport that emits one last `didWriteData` before `didFinishDownloadingTo`)
+can deliver a `.progress` event after the manager has already moved a file to
+`.verifying`. The reducer deliberately maps `verifying + progress → unchanged`,
+but `handleEvent` was still overwriting `file.bytesReceived` and upserting the
+file — silently reverting the state before the store write. The handler now
+guards on `.downloading` and drops the event otherwise.
+
+**Manual retry clears stale partials.** Before Week 12, `retry()` only flipped
+state back to `.queued`. A `.succeed` mock — and worse, the real transport on
+a plain GET that overwrites — would land fresh bytes next to whatever stale
+prefix the last attempt left, producing sha mismatches on what should have
+been a clean re-download. `retry()` now also deletes the part file, clears
+`bytesReceived`/`hasResumeData`, and removes any persisted resume data.
+
+**ENOSPC is `insufficientStorage`, not a generic failure.** Mid-download POSIX
+ENOSPC was mapped to `.downloadFailed`, which told the user nothing actionable
+and — worse — routed through the same backoff path as a flaky network.
+`mapError` now recognizes `NSPOSIXErrorDomain/ENOSPC` and returns
+`.insufficientStorage`, which the UI surfaces with a "free up space" message
+and which the retry policy declines to auto-retry (space does not free itself
+in 1–4 seconds).
+
+**MockTransport mirrors the real transport's resume contract.**
+`FoundationURLSessionTransport.start` computes `Range: bytes=<size>-` from the
+destination part-file's on-disk size; the mock previously required tests to
+inject the header by hand, which meant the failure-path suite wasn't actually
+testing the manager's resume path end-to-end. The mock now computes the same
+header from the part file, appends the missing suffix on a Range request, and
+overwrites on a plain GET (matching real servers).

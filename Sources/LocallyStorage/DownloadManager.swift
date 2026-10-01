@@ -130,6 +130,11 @@ public actor DownloadManager {
     }
 
     /// Re-enqueue failed files for another automatic or manual attempt.
+    /// Verification failures (size/sha) already deleted the part file; for
+    /// transport failures any leftover partial bytes belong to an attempt
+    /// whose integrity is unknown — the next start begins from offset 0,
+    /// so the stale part must be dropped or the fresh bytes would append
+    /// onto garbage and fail verification again.
     public func retry(jobID: UUID) async throws {
         guard var job = try await store.job(id: jobID) else { return }
         for index in job.files.indices where job.files[index].state == .failed {
@@ -137,6 +142,13 @@ public actor DownloadManager {
             apply(DownloadReducer.reduce(current, .enqueue), to: &job.files[index])
             job.files[index].attempts += 1
             job.files[index].failureDetail = nil
+            job.files[index].bytesReceived = 0
+            job.files[index].hasResumeData = false
+            if let part = try? layout.partialFileURL(jobID: jobID,
+                                                     relativePath: job.files[index].relativePath) {
+                try? FileManager.default.removeItem(at: part)
+            }
+            try? FileManager.default.removeItem(at: layout.resumeDataURL(jobID: jobID, fileIndex: index))
         }
         _ = try await store.upsert(job)
         schedule()
@@ -301,6 +313,14 @@ public actor DownloadManager {
             case .progress(let received, _):
                 file.bytesReceived = received
                 let current = DownloadState(pausedPersisted: file)
+                // A trailing progress event can arrive after the transport's
+                // .finished/.failed was already handled (URLSession delivers
+                // a final didWriteData before didFinishDownloadingTo; mocks
+                // and background sessions can interleave them). Progress only
+                // makes sense while downloading — in .verifying it would be
+                // an illegal reducer transition that silently reverts the
+                // state before upsert, losing the verification step.
+                guard case .downloading = current else { return }
                 let progress = file.expectedSize > 0 ? Double(received) / Double(file.expectedSize) : 0
                 apply(DownloadReducer.reduce(current, .progress(min(1, progress))), to: &file)
                 job.files[fileIndex] = file
@@ -466,6 +486,13 @@ public actor DownloadManager {
         if nsError.domain == NSURLErrorDomain {
             return .network(userMessage: "The network connection failed.",
                             technicalDetail: "NSURLErrorDomain \(nsError.code)")
+        }
+        // Disk-full surfaced mid-write (POSIX ENOSPC) is a storage problem,
+        // not a generic download failure — the user needs to free space.
+        if nsError.domain == NSPOSIXErrorDomain && nsError.code == ENOSPC {
+            return .insufficientStorage(
+                userMessage: "Not enough storage. Free up space and retry the download.",
+                technicalDetail: "ENOSPC while writing the download")
         }
         return .downloadFailed(userMessage: "The download failed.",
                                technicalDetail: String(describing: error))
