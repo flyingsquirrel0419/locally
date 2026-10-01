@@ -28,14 +28,11 @@ jobs:
         run: brew install xcodegen
       - name: Generate Xcode project
         run: xcodegen generate
-      - name: Build for testing
+      - name: Validate string catalogs
         run: |
-          xcodebuild build-for-testing \
-            -project Locally.xcodeproj \
-            -scheme Locally \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -quiet
-      - name: Test
+          plutil -lint App/Resources/*.xcstrings
+          plutil -lint App/Info.plist App/Locally.entitlements
+      - name: Test (includes app build and app smoke tests)
         run: |
           xcodebuild test \
             -project Locally.xcodeproj \

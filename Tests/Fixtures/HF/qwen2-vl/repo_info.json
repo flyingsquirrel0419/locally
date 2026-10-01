@@ -1,0 +1,24 @@
+{
+  "id": "Qwen/Qwen2-VL-2B-Instruct",
+  "author": "Qwen",
+  "sha": "c3d4e5f6a7b80000000000000000000000000003",
+  "lastModified": "2025-01-20T12:00:00.000Z",
+  "private": false,
+  "gated": false,
+  "pipeline_tag": "image-text-to-text",
+  "library_name": "transformers",
+  "tags": ["vision", "image-text-to-text", "qwen2_vl"],
+  "siblings": [
+    { "rfilename": ".gitattributes" },
+    { "rfilename": "README.md", "size": 15200 },
+    { "rfilename": "config.json", "size": 1240 },
+    { "rfilename": "generation_config.json", "size": 250 },
+    { "rfilename": "preprocessor_config.json", "size": 340 },
+    { "rfilename": "tokenizer.json", "size": 11422000 },
+    { "rfilename": "tokenizer_config.json", "size": 7400 },
+    { "rfilename": "model-00001-of-00002.safetensors", "size": 2300000000, "lfs": { "size": 2300000000, "sha256": "8dfa546940b77f6c699722f489f5b98da9a341d091dc229ffbaccffe181ae4c9" } },
+    { "rfilename": "model-00002-of-00002.safetensors", "size": 2100000000, "lfs": { "size": 2100000000, "sha256": "d10de3c50d160f55c22fc5d56b616f0278d70baacb5df68b5bd49b45ce8b2513" } },
+    { "rfilename": "model.safetensors.index.json", "size": 38000 },
+    { "rfilename": "demo.jpg", "size": 120000 }
+  ]
+}

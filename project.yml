@@ -17,6 +17,8 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: App
+    entitlements:
+      path: App/Locally.entitlements
     dependencies:
       - package: Locally
         product: LocallyCore
@@ -36,7 +38,7 @@ targets:
         CFBundleDisplayName: Locally
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
-        UILaunchScreen_Generation: YES
+        UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -44,6 +46,8 @@ targets:
         UIBackgroundModes:
           - fetch
           - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - me.teamwicked.locally.download-maintenance
         NSPhotoLibraryAddUsageDescription: "Locally saves generated images to your photo library only when you ask it to."
         ITSAppUsesNonExemptEncryption: NO
     settings:
@@ -52,3 +56,31 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         SWIFT_STRICT_CONCURRENCY: complete
+  LocallyTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Tests/AppTests
+    dependencies:
+      - target: Locally
+      - package: Locally
+        product: LocallyCore
+      - package: Locally
+        product: LocallyHF
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.tests
+        SWIFT_STRICT_CONCURRENCY: complete
+schemes:
+  Locally:
+    build:
+      targets:
+        Locally: all
+        LocallyTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - LocallyTests

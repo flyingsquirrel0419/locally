@@ -1,0 +1,19 @@
+{
+  "id": "acme/experimental-chat-7b",
+  "author": "acme",
+  "sha": "a7b8c9d0e1f20000000000000000000000000007",
+  "lastModified": "2025-03-02T18:00:00.000Z",
+  "private": false,
+  "gated": false,
+  "pipeline_tag": "text-generation",
+  "library_name": "transformers",
+  "tags": ["text-generation", "custom_code"],
+  "siblings": [
+    { "rfilename": ".gitattributes" },
+    { "rfilename": "README.md", "size": 6000 },
+    { "rfilename": "config.json", "size": 900 },
+    { "rfilename": "modeling_acme.py", "size": 42000 },
+    { "rfilename": "tokenizer_config.json", "size": 1200 },
+    { "rfilename": "model.safetensors", "size": 13500000000, "lfs": { "size": 13500000000, "sha256": "88dc5950f1b7360e94baf6263e0b68fe409e51764332eb311ed7b224ca51e855" } }
+  ]
+}

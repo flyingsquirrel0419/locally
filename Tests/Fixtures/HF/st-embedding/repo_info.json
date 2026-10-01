@@ -1,0 +1,21 @@
+{
+  "id": "sentence-transformers/all-MiniLM-L6-v2",
+  "author": "sentence-transformers",
+  "sha": "f6a7b8c9d0e10000000000000000000000000006",
+  "lastModified": "2024-08-05T16:00:00.000Z",
+  "private": false,
+  "gated": false,
+  "pipeline_tag": "sentence-similarity",
+  "library_name": "sentence-transformers",
+  "tags": ["sentence-transformers", "feature-extraction", "sentence-similarity"],
+  "siblings": [
+    { "rfilename": ".gitattributes" },
+    { "rfilename": "README.md", "size": 14000 },
+    { "rfilename": "config.json", "size": 680 },
+    { "rfilename": "config_sentence_transformers.json", "size": 400 },
+    { "rfilename": "tokenizer.json", "size": 466000 },
+    { "rfilename": "tokenizer_config.json", "size": 350 },
+    { "rfilename": "model.safetensors", "size": 90900000, "lfs": { "size": 90900000, "sha256": "fd371492203299c583cc790469a7b899f529b90aa672c304b7085a996b2c82b3" } },
+    { "rfilename": "pytorch_model.bin", "size": 90900000, "lfs": { "size": 90900000, "sha256": "4b25bb574cc2f52a73a8d73fce026d2fda3feb7f2bf8d3873919c53997228d86" } }
+  ]
+}

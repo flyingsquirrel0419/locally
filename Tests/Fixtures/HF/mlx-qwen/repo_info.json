@@ -1,0 +1,21 @@
+{
+  "id": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+  "author": "mlx-community",
+  "sha": "a1b2c3d4e5f60000000000000000000000000001",
+  "lastModified": "2025-01-15T10:00:00.000Z",
+  "private": false,
+  "gated": false,
+  "pipeline_tag": "text-generation",
+  "library_name": "mlx",
+  "tags": ["mlx", "text-generation", "safetensors"],
+  "siblings": [
+    { "rfilename": ".gitattributes" },
+    { "rfilename": "README.md", "size": 4200 },
+    { "rfilename": "config.json", "size": 690 },
+    { "rfilename": "generation_config.json", "size": 240 },
+    { "rfilename": "tokenizer.json", "size": 11421184 },
+    { "rfilename": "tokenizer_config.json", "size": 7300 },
+    { "rfilename": "special_tokens_map.json", "size": 620 },
+    { "rfilename": "model.safetensors", "size": 371000000, "lfs": { "size": 371000000, "sha256": "4c3a264b14dc4a9f9694dc1b2c5b0fee46c42a958d7655eaf5f68a6891d5579f" } }
+  ]
+}
