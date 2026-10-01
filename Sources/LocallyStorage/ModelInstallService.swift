@@ -13,13 +13,16 @@ public actor ModelInstallService {
     private let downloadManager: DownloadManager
     private let registry: ModelRegistry
     private let authHeaderProvider: AuthHeaderProvider?
+    private let layout: FilesystemLayout
     private var watchTasks: [UUID: Task<Void, Never>] = [:]
 
     public init(downloadManager: DownloadManager, registry: ModelRegistry,
-                authHeaderProvider: AuthHeaderProvider? = nil) {
+                authHeaderProvider: AuthHeaderProvider? = nil,
+                layout: FilesystemLayout = .applicationSupport()) {
         self.downloadManager = downloadManager
         self.registry = registry
         self.authHeaderProvider = authHeaderProvider
+        self.layout = layout
     }
 
     /// Authorization header value for one URL, read fresh per call.
@@ -85,9 +88,39 @@ public actor ModelInstallService {
                     return  // job cancelled/removed; nothing to register
                 }
                 if job.files.allSatisfy({ $0.state == .completed }) {
+                    var installedDescriptor = descriptor
+                    var sizeOnDisk = job.totalBytes
+                    // .zip required files (Core ML diffusion resource
+                    // archives) are expanded next to where they landed, then
+                    // the archive is removed; failure leaves the download in
+                    // place and the model unregistered.
+                    if descriptor.requiredFiles.contains(where: {
+                        $0.path.lowercased().hasSuffix(".zip")
+                    }) {
+                        let directory = self.layout.modelDirectory(repoID: descriptor.repoID,
+                                                                   revision: revision)
+                        do {
+                            let extracted = try await Task.detached(priority: .utility) {
+                                try ArchiveInstaller().extractArchives(in: directory)
+                            }.value
+                            if !extracted.isEmpty {
+                                installedDescriptor.requiredFiles.removeAll { file in
+                                    extracted.contains(file.path)
+                                }
+                                let extractedSet = Set(extracted)
+                                sizeOnDisk = descriptor.requiredFiles
+                                    .filter { !extractedSet.contains($0.path) }
+                                    .reduce(Int64(0)) { $0 + $1.size }
+                            }
+                        } catch {
+                            // Extraction refused (unsafe or corrupt archive):
+                            // do not register a half-usable install.
+                            return
+                        }
+                    }
                     let model = InstalledModel(repoID: descriptor.repoID, revision: revision,
-                                               descriptor: descriptor,
-                                               sizeOnDisk: job.totalBytes)
+                                               descriptor: installedDescriptor,
+                                               sizeOnDisk: sizeOnDisk)
                     try? await self.registry.register(model)
                     return
                 }

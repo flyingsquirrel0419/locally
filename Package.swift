@@ -56,6 +56,15 @@ var targets: [Target] = [
 ]
 
 #if os(Linux)
+// ZIP extraction in LocallyStorage inflates via system zlib on Linux
+// (Compression.framework is Apple-only).
+targets.append(.systemLibrary(name: "CZlib", path: "Sources/CZlib"))
+if let storageIndex = targets.firstIndex(where: { $0.name == "LocallyStorage" }) {
+    targets[storageIndex] = .target(
+        name: "LocallyStorage",
+        dependencies: ["LocallyCore", "CZlib"]
+    )
+}
 if linuxLlamaAvailable {
     // CLlama/shim.h includes "include/llama.h" where `include` is a symlink
     // into the install dir, so dependents need no extra -I flags.
