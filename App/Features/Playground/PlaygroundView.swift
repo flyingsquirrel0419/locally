@@ -53,15 +53,19 @@ struct PlaygroundView: View {
     // MARK: - Model list
 
     /// Installed models the playground can serve: text (chat or decision
-    /// mode) and decision-modality models. MLX and GGUF formats both
-    /// welcome — routing decides which runtime serves the selection.
+    /// mode), decision-modality models, vision-language models, and video
+    /// understanding. MLX and GGUF formats both welcome — routing decides
+    /// which runtime serves the selection.
     private var installedTextModels: [InstalledModel] {
         guard let registry = library.registry else { return [] }
         return registry.list().filter { model in
             !model.hasMissingFiles
                 && (model.descriptor.modality == .text
                     || model.descriptor.modality == .unknown
-                    || model.descriptor.modality == .decision)
+                    || model.descriptor.modality == .decision
+                    || model.descriptor.modality == .visionLanguage
+                    || model.descriptor.modality == .imageUnderstanding
+                    || model.descriptor.modality == .videoUnderstanding)
         }
     }
 
@@ -108,6 +112,12 @@ struct PlaygroundView: View {
         let prepared = preparedDescriptor(for: model, registry: registry)
         let decision = registry.router.decide(for: prepared, on: registry.device)
         switch model.descriptor.modality {
+        case .visionLanguage, .imageUnderstanding:
+            visionSession(prepared: prepared, decision: decision, registry: registry,
+                          id: model.id)
+        case .videoUnderstanding:
+            videoSession(prepared: prepared, decision: decision, registry: registry,
+                         id: model.id)
         case .decision:
             decisionSession(prepared: prepared, decision: decision, registry: registry,
                             id: model.id)
@@ -176,6 +186,40 @@ struct PlaygroundView: View {
         case .supported:
             DecisionPlaygroundView(model: prepared, router: registry.router,
                                    device: registry.device)
+                .id(id)
+        }
+    }
+
+    /// Vision surface, gated on the router's rating for the model.
+    @ViewBuilder
+    private func visionSession(prepared: ModelDescriptor,
+                               decision: RuntimeRouter.Decision,
+                               registry: RuntimeRegistry, id: String) -> some View {
+        switch decision.rating {
+        case .unsupported(let reason):
+            UnsupportedModelView(reason: reason)
+        case .risky(let reason):
+            RiskyVisionModelView(model: prepared, registry: registry, warning: reason)
+                .id(id)
+        case .supported:
+            VisionPlaygroundView(model: prepared, registry: registry)
+                .id(id)
+        }
+    }
+
+    /// Video understanding surface: frame sampling over the same VLM stack.
+    @ViewBuilder
+    private func videoSession(prepared: ModelDescriptor,
+                              decision: RuntimeRouter.Decision,
+                              registry: RuntimeRegistry, id: String) -> some View {
+        switch decision.rating {
+        case .unsupported(let reason):
+            UnsupportedModelView(reason: reason)
+        case .risky(let reason):
+            RiskyVideoModelView(model: prepared, registry: registry, warning: reason)
+                .id(id)
+        case .supported:
+            VideoPlaygroundView(model: prepared, registry: registry)
                 .id(id)
         }
     }
@@ -289,6 +333,59 @@ private struct RiskyDecisionModelView: View {
         if proceed {
             DecisionPlaygroundView(model: model, router: registry.router,
                                    device: registry.device)
+        } else {
+            ContentUnavailableView {
+                Label(String(localized: "playground.risky.title", table: "Playground"),
+                      systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(warning)
+            } actions: {
+                Button(String(localized: "playground.risky.tryAnyway", table: "Playground")) {
+                    proceed = true
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+}
+
+
+/// Risky gate for the vision surface: same warning flow as chat.
+private struct RiskyVisionModelView: View {
+    let model: ModelDescriptor
+    let registry: RuntimeRegistry
+    let warning: String
+    @State private var proceed = false
+
+    var body: some View {
+        if proceed {
+            VisionPlaygroundView(model: model, registry: registry)
+        } else {
+            ContentUnavailableView {
+                Label(String(localized: "playground.risky.title", table: "Playground"),
+                      systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(warning)
+            } actions: {
+                Button(String(localized: "playground.risky.tryAnyway", table: "Playground")) {
+                    proceed = true
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+}
+
+/// Risky gate for the video understanding surface.
+private struct RiskyVideoModelView: View {
+    let model: ModelDescriptor
+    let registry: RuntimeRegistry
+    let warning: String
+    @State private var proceed = false
+
+    var body: some View {
+        if proceed {
+            VideoPlaygroundView(model: model, registry: registry)
         } else {
             ContentUnavailableView {
                 Label(String(localized: "playground.risky.title", table: "Playground"),

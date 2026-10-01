@@ -506,3 +506,55 @@ the decode loop isn't re-allocating Metal temporaries per token, small
 enough that a memory warning actually frees memory the allocator would
 otherwise hold on to. The previous 25%-of-physical cache (multi-GB on
 modern iPhones) was effectively unbounded for iOS.
+
+## Week 8
+
+### 2026-10-02 — VLM runtime over MLXVLM, images downsampled pre-inference
+
+Vision-language inference runs through MLXVLM (mlx-swift-lm 3.31.4), loading
+only from the local install directory via
+`VLMModelFactory.shared.loadContainer(from: URL, using: TokenizerLoader)`
+— the downloader path is never touched. Generation is
+`container.prepare(input: UserInput)` then
+`container.generate(input:parameters:)` streaming `Generation` events;
+the API was verified against the pinned tag's sources, not guessed. Images
+are thumbnailed with `CGImageSourceCreateThumbnailAtIndex`
+(kCGImageSourceThumbnailMaxPixelSize) before they reach MLX, so
+full-resolution originals never decode into memory. The known-architecture
+list lives in the pure `VLMTypeRegistry` (LocallyRuntime) and mirrors
+MLXVLM's own creators map, so compatibility is testable on Linux.
+
+### 2026-10-02 — ImagePreprocessingPlanner mirrors the model's own resize
+
+The planner reimplements Qwen-VL smart resize (round to patch×merge
+multiples, sqrt-scale into [min_pixels, max_pixels]) to match what
+MLXVLM's `QwenVL.targetSize` will do downstream, and adds an absolute
+1536 px long-edge device cap. Fixed-input families (SigLIP/LLaVA/PaliGemma:
+`image_size`, `size.shortest_edge`) bypass the cap because the processor
+defines the target itself. The fallback pixel budget (1280×28² ≈ 1.0 MP)
+matches the budget MLXVLM applies to Qwen-VL models. Token counts are the
+patch-grid after merge ((h/f)×(w/f)); buffer bytes are RGBA at the target.
+
+## Week 11
+
+### 2026-10-02 — Video understanding = sampled frames over a VLM, map-reduce
+
+No native video encoder on-device: `VideoSamplingPlanner` picks 8/16/32
+frames adaptively (<15 s → 8, <2 min → 16, else 32), halves under serious
+thermal or low power (floor 4), and refuses at critical thermal. Timestamps
+are segment midpoints — deterministic, jitter-free, so repeat runs sample
+identical frames. `AVAssetImageGenerator` (tolerant timing, maximumSize)
+extracts frames lazily per batch; batches are capped by the model's
+images-per-request limit and the decoded-buffer budget. Per-batch answers
+are aggregated with a reduce prompt; "important moments" cites
+`[t=…s]` labels that parse back into validated, duration-clamped
+`TimeRange`s. Mid-run thermal re-checks between batches truncate the
+remaining batches rather than aborting a half-labeled batch.
+
+### 2026-10-02 — Video generation interface exists, runtime honestly refuses
+
+`VideoGeneratingRuntime` and `VideoGenerationParameters` are defined in
+LocallyRuntime so the call-site contract is stable, but the registered
+implementation (`ExperimentalVideoGenerationRuntime`) reports unsupported
+with a real reason: no text-to-video model fits the iPhone memory/compute
+envelope today. No fake support, no fake previews.

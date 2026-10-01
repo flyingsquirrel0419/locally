@@ -24,7 +24,8 @@ final class RuntimeRegistry {
     private(set) var loadedRepoID: String?
 
     init(runtimes: [any ModelCompatibleRuntime]? = nil) {
-        let runtimes = runtimes ?? [GGUFRuntime(), MLXRuntime()]
+        let runtimes = runtimes ?? [GGUFRuntime(), MLXRuntime(), VLMRuntime(),
+                                    ExperimentalVideoGenerationRuntime()]
         self.runtimes = runtimes
         self.router = RuntimeRouter(runtimes: runtimes)
         self.device = RuntimeRegistry.probeDevice()
@@ -92,6 +93,16 @@ final class RuntimeRegistry {
             return device.metalAvailable
                 ? .available
                 : .unavailable(reason: "MLX requires a Metal device; unavailable on Simulator")
+        case .vision:
+            guard VLMRuntime.isLibraryLinked else {
+                return .unavailable(reason: "MLXVLM libraries are not linked into this build")
+            }
+            return device.metalAvailable
+                ? .available
+                : .unavailable(reason: "MLXVLM requires a Metal device; unavailable on Simulator")
+        case .video:
+            // Video generation has no real on-device backend yet.
+            return .unavailable(reason: ExperimentalVideoGenerationRuntime.unavailableReason)
         default:
             return runtimes.contains { $0.kind == kind } ? .available
                 : .unavailable(reason: "runtime not registered")
