@@ -18,11 +18,13 @@ final class HomeViewModel {
     var activeDownloadCount = 0
 
     private let profiler: DeviceProfiler = SystemDeviceProfiler()
-    // Task is Sendable and Task.cancel() is thread-safe; plain nonisolated
-    // lets deinit cancel without violating MainActor isolation.
-    private nonisolated var thermalTask: Task<Void, Never>?
-    private nonisolated var benchmarkTask: Task<Void, Never>?
-    private nonisolated var summaryTask: Task<Void, Never>?
+    // Task handles are bookkeeping, not UI state: @ObservationIgnored keeps
+    // them out of the @Observable macro (whose generated accessors reject
+    // nonisolated mutable storage), and nonisolated lets deinit cancel
+    // without violating MainActor isolation. Task.cancel() is thread-safe.
+    @ObservationIgnored private nonisolated var thermalTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated var benchmarkTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated var summaryTask: Task<Void, Never>?
 
     func load() async {
         profile = await profiler.profile()
