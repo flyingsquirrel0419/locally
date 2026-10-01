@@ -79,9 +79,15 @@ public final class VLMRuntime: ModelCompatibleRuntime, @unchecked Sendable {
 
     #endif
 
+    /// Thermal pacing hook, awaited between generated tokens. Default no-op;
+    /// RuntimeRegistry injects the policy-backed pacer.
+    private let pacer: any GenerationPacer
+
     // Memory warnings are handled app-wide by ResourcePolicyObserver; this
     // runtime registers no NotificationCenter observers of its own.
-    public init() {}
+    public init(pacer: any GenerationPacer = NoOpGenerationPacer()) {
+        self.pacer = pacer
+    }
 
     // MARK: - Compatibility
 
@@ -338,6 +344,7 @@ public final class VLMRuntime: ModelCompatibleRuntime, @unchecked Sendable {
                 case .chunk(let text):
                     generated += text
                     continuation.yield(.token(text))
+                    await pacer.pace()
                     if request.parameters.stop.contains(where: { generated.hasSuffix($0) }) {
                         break streamLoop
                     }
