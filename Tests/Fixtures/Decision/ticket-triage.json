@@ -1,0 +1,29 @@
+{
+  "state": "Three open tickets: (1) login page returns 500 for all users, (2) dark-mode toggle misaligned on iPad, (3) customer asks for a CSV export feature.",
+  "questions": {
+    "order": {
+      "type": "ranking",
+      "items": ["login-500", "ipad-alignment", "csv-export"],
+      "instructions": "Rank by urgency, most urgent first."
+    },
+    "tags": {
+      "type": "choice",
+      "multi": true,
+      "options": ["bug", "feature", "ui", "outage"],
+      "instructions": "Select every tag that applies to ticket (1)."
+    },
+    "summary": {
+      "type": "structured",
+      "instructions": "Summarize ticket (1).",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string", "minLength": 1, "maxLength": 120},
+          "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+          "affected_users": {"type": "integer", "min": 0}
+        },
+        "required": ["title", "severity"]
+      }
+    }
+  }
+}

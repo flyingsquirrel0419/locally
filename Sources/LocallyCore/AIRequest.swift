@@ -7,6 +7,8 @@ public enum AIInput: Codable, Sendable, Hashable {
     case audio(Data)
     case videoFrame(Data)
     case chat([ChatMessage])
+    /// Structured JSON payload (e.g. a decision schema document).
+    case json([String: JSONValue])
 
     public struct ChatMessage: Codable, Sendable, Hashable {
         public enum Role: String, Codable, Sendable, Hashable {

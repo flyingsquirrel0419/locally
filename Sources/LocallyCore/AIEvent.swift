@@ -71,14 +71,39 @@ public enum JSONValue: Codable, Sendable, Hashable {
     }
 }
 
-/// Placeholder result for the decision runtime: key plus JSON-ish value.
+/// One answered question from the decision runtime: key plus JSON-ish value
+/// plus the metadata needed to trust and debug the answer.
 public struct DecisionResult: Codable, Sendable, Hashable {
+    /// How the answer was produced.
+    public enum Method: String, Codable, Sendable, Hashable {
+        /// Token log-probability scoring over candidates (calibrated).
+        case scored
+        /// Free-text generation validated against the question's output
+        /// schema (uncalibrated; `probabilities` stays nil).
+        case generated
+    }
+
     public var key: String
     public var value: JSONValue
+    /// The question type this value answers, when known ("choice", "boolean",
+    /// "probability", "noul", "score", "ranking", "structured").
+    public var type: String?
+    /// Per-candidate probabilities for scored answers (choice/boolean/noul/
+    /// score/ranking); nil for generated output, which is not calibrated.
+    public var probabilities: [String: Double]?
+    public var method: Method?
+    /// Raw model text for debugging. Never logged.
+    public var rawText: String?
 
-    public init(key: String, value: JSONValue) {
+    public init(key: String, value: JSONValue, type: String? = nil,
+                probabilities: [String: Double]? = nil, method: Method? = nil,
+                rawText: String? = nil) {
         self.key = key
         self.value = value
+        self.type = type
+        self.probabilities = probabilities
+        self.method = method
+        self.rawText = rawText
     }
 }
 

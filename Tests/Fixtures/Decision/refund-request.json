@@ -1,0 +1,30 @@
+{
+  "state": "Order #1042 arrived with a cracked screen. Customer contacted support 9 days after delivery, within the 30-day return window. The item cost $249 and is still in its original packaging.",
+  "questions": {
+    "approve_refund": {
+      "type": "boolean",
+      "instructions": "Should the refund be approved under the standard return policy?"
+    },
+    "confidence": {
+      "type": "probability",
+      "instructions": "How confident are you that the refund should be approved?"
+    },
+    "review": {
+      "type": "noul",
+      "levels": 5,
+      "instructions": "Does this request need human review?"
+    },
+    "resolution": {
+      "type": "choice",
+      "options": ["refund", "replacement", "repair", "reject"],
+      "instructions": "Pick the best resolution for the customer."
+    },
+    "priority": {
+      "type": "score",
+      "min": 1,
+      "max": 5,
+      "integer": true,
+      "instructions": "How urgent is this ticket?"
+    }
+  }
+}
