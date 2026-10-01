@@ -309,3 +309,58 @@ every byte offset and assert a thrown error, never a crash.
 unsupported reason; a risky rating shows the warning and requires an
 explicit "Try Anyway". The metrics footer displays only values measured by
 the runtime (load time, TTFT, tok/s, token count) — nil renders as "–".
+
+## Week 6b
+
+### 2026-10-01 — Llama decode throughput: persistent sampler + fused step
+
+Measured 2.68 tok/s on the dev container (2 cores, SmolLM2-135M Q4_K_M),
+~55x slower than llama-bench's `tg32 = 148 t/s` on identical threads and
+model. Root causes, in order of impact:
+
+1. `LlamaBridge.sampleNext` built a fresh `llama_sampler_chain` (init,
+   add top-k/top-p/temp/dist, sample, free) for every generated token.
+   On a 135 M model, per-token chain setup dominated decode time.
+2. The decode loop made four actor round-trips per token (`sampleNext`,
+   `isEndOfGeneration`, `tokenPiece`, `decode`). Each hop has measurable
+   overhead when the whole decode step is ~7 ms.
+3. `n_threads` was set from `ProcessInfo.processorCount` (logical cores)
+   instead of `activeProcessorCount` (cgroup-aware).
+
+Fix: one sampler chain per decode context (`ensureSampler` rebuilds only
+on config change; freed in `endContext`), a fused `generateNext` that
+samples + EOG-checks + decodes + returns the piece bytes in a single
+actor hop, and `activeProcessorCount` for both `n_threads` and
+`n_threads_batch`. After: 148.10 tok/s release, 114.8 tok/s debug —
+matches llama-bench's tg32 mean within noise. See PERFORMANCE.md.
+
+### 2026-10-01 — Package.swift heals the CLlama include symlink
+
+`Sources/CLlama/include` is a gitignored symlink into
+`.deps/llama-install/include`. A fresh checkout has the install dir but
+not the symlink; the old manifest only checked that the install dir
+existed and then failed the build with a missing header. The manifest
+now checks that `Sources/CLlama/include/llama.h` resolves and, if not,
+tries to (re)create the symlink from the install dir before deciding
+llama is available. Without the install dir the CLlama/LocallyLlama
+targets are simply not added, so plain `swift build` works on machines
+without llama.cpp. Verified: debug+release with llama, debug without.
+
+### 2026-10-01 — LocallyError.contextOverflow (not inferenceFailed)
+
+A prompt that cannot fit the requested `n_ctx` is a distinct failure mode
+from a generic inference error: the user-facing fix is "shorten the
+conversation or raise the context window," not "the model broke." The
+GGUF runtime now throws `.contextOverflow` with that user message; the
+live test asserts it surfaces instead of crashing when `contextLength: 128`
+is combined with a ~400-token prompt.
+
+### 2026-10-01 — peakMemoryBytes is process RSS, labelled approximate
+
+llama.cpp's C API does not expose per-model or per-context memory
+counters. The bridge samples `/proc/self/statm` resident pages on Linux
+and `task_info(MACH_VM_BASIC_INFO).resident_size` on Apple and reports
+the max of (before, after) decode. It covers the whole process, so it
+is approximate; the `InferenceMetadata.peakMemoryBytes` docstring says
+so. Better than nil — the playground's metrics footer can now show a
+real number, and leak regressions become visible in tests.

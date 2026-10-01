@@ -158,7 +158,6 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
                          continuation: AsyncThrowingStream<AIEvent, Error>.Continuation) async {
         #if canImport(CLlama) || canImport(llama)
         continuation.yield(.started(requestID: request.id))
-        let start = ContinuousClock.now
         do {
             guard let (_, loadTime) = await state.current() else {
                 throw LocallyError.runtimeUnavailable(
@@ -170,7 +169,7 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
             let maxTokens = max(request.parameters.maxTokens, 1)
 
             try await bridge.beginContext(maxContext: request.parameters.contextLength)
-            let nCtx = await bridge.contextLength
+            let nCtx = await bridge.activeContextLength
 
             let prompt = await bridge.renderPrompt(session: session)
             let promptTokens = try await bridge.tokenize(prompt, addSpecial: false)
@@ -178,19 +177,21 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
             // Context overflow policy: truncate the generation budget to fit;
             // fail honestly when the prompt alone overflows the window.
             if promptTokens.count >= nCtx {
-                throw LocallyError.inferenceFailed(
+                throw LocallyError.contextOverflow(
                     userMessage: "The conversation is too long for this model's context window.",
                     technicalDetail: "prompt \(promptTokens.count) tokens >= context \(nCtx)")
             }
             let budget = min(maxTokens, nCtx - promptTokens.count)
 
+            let peakBefore = await bridge.residentMemoryBytes()
+            let promptStart = ContinuousClock.now
             try await bridge.decode(tokens: promptTokens)
 
             var assembler = PieceAssembler()
             var generated = ""
             var generatedCount = 0
             var ttft: TimeInterval?
-            let genStart = ContinuousClock.now
+            var decodeSeconds: TimeInterval = 0
 
             for _ in 0..<budget {
                 if Task.isCancelled {
@@ -199,36 +200,41 @@ public final class GGUFRuntime: ModelCompatibleRuntime, @unchecked Sendable {
                     await bridge.endContext()
                     return
                 }
-                let token = try await bridge.sampleNext(
+                let stepStart = ContinuousClock.now
+                let step = try await bridge.generateNext(
                     temperature: request.parameters.temperature,
                     topP: request.parameters.topP,
                     topK: request.parameters.topK,
                     seed: request.parameters.seed)
-                if await bridge.isEndOfGeneration(token) { break }
-                if ttft == nil { ttft = start.duration(to: .now).magnitudeSeconds }
+                if step.isEOG { break }
+                decodeSeconds += stepStart.duration(to: .now).magnitudeSeconds
+                if ttft == nil {
+                    ttft = promptStart.duration(to: .now).magnitudeSeconds
+                }
                 generatedCount += 1
-                let piece = await bridge.tokenPiece(token)
-                let text = assembler.append(piece)
+                let text = assembler.append(step.piece)
                 if !text.isEmpty {
                     generated += text
                     continuation.yield(.token(text))
                     if request.parameters.stop.contains(where: { generated.hasSuffix($0) }) { break }
                 }
-                try await bridge.decode(tokens: [token])
             }
             let remainder = assembler.flush()
             if !remainder.isEmpty {
                 generated += remainder
                 continuation.yield(.token(remainder))
             }
+            let peakAfter = await bridge.residentMemoryBytes()
             await bridge.endContext()
 
-            let genSeconds = max(genStart.duration(to: .now).magnitudeSeconds, 0.000_001)
+            let peakMemory = [peakBefore, peakAfter].compactMap { $0 }.max()
             let metadata = InferenceMetadata(
                 loadTime: loadTime,
-                ttft: ttft ?? start.duration(to: .now).magnitudeSeconds,
-                tokensPerSecond: generatedCount > 0 ? Double(generatedCount) / genSeconds : nil,
-                generatedTokens: generatedCount)
+                ttft: ttft ?? promptStart.duration(to: .now).magnitudeSeconds,
+                tokensPerSecond: generatedCount > 0 && decodeSeconds > 0
+                    ? Double(generatedCount) / decodeSeconds : nil,
+                generatedTokens: generatedCount,
+                peakMemoryBytes: peakMemory)
             continuation.yield(.completed(result: AIResult(
                 requestID: request.id, text: generated, metadata: metadata)))
             continuation.finish()
