@@ -1,0 +1,790 @@
+{
+ "sourceLanguage": "en",
+ "strings": {
+  "home.downloads.active": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Active Downloads"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "진행 중인 다운로드"
+     }
+    }
+   }
+  },
+  "home.downloads.none": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "No active downloads"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "진행 중인 다운로드 없음"
+     }
+    }
+   }
+  },
+  "home.models.installed": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Installed Models"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "설치된 모델"
+     }
+    }
+   }
+  },
+  "home.models.recent": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Recent Models"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "최근 모델"
+     }
+    }
+   }
+  },
+  "models.activeDownloads": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "%lld active download(s)"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "진행 중인 다운로드 %lld개"
+     }
+    }
+   }
+  },
+  "models.add.download": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Download"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "다운로드"
+     }
+    }
+   }
+  },
+  "models.add.downloading": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Queued — opening Downloads…"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "대기열에 추가됨 — 다운로드로 이동…"
+     }
+    }
+   }
+  },
+  "models.delete.button": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Delete"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "삭제"
+     }
+    }
+   }
+  },
+  "models.delete.confirm.message": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "This removes the model files from this device. You can download it again later."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "이 기기에서 모델 파일을 삭제합니다. 나중에 다시 다운로드할 수 있습니다."
+     }
+    }
+   }
+  },
+  "models.delete.confirm.title": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Delete Model?"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "모델을 삭제할까요?"
+     }
+    }
+   }
+  },
+  "models.detail.benchmark": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Benchmark"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "벤치마크"
+     }
+    }
+   }
+  },
+  "models.detail.benchmark.load": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "load"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "로드"
+     }
+    }
+   }
+  },
+  "models.detail.benchmark.memory": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "peak memory"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "최대 메모리"
+     }
+    }
+   }
+  },
+  "models.detail.benchmark.tps": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "tok/s"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "토큰/초"
+     }
+    }
+   }
+  },
+  "models.detail.benchmark.ttft": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "first token"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "첫 토큰"
+     }
+    }
+   }
+  },
+  "models.detail.benchmark.unavailable": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Benchmarking needs a working runtime for this model. No runtime is available yet."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "벤치마크에는 이 모델을 실행할 런타임이 필요합니다. 아직 사용 가능한 런타임이 없습니다."
+     }
+    }
+   }
+  },
+  "models.detail.benchmarks.empty": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "No benchmark runs yet."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "벤치마크 기록이 없습니다."
+     }
+    }
+   }
+  },
+  "models.detail.context": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Context length"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "컨텍스트 길이"
+     }
+    }
+   }
+  },
+  "models.detail.context.default": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Default"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "기본값"
+     }
+    }
+   }
+  },
+  "models.detail.delete.loaded": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "This model is currently loaded. Unload it before deleting."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "이 모델은 현재 로드되어 있습니다. 삭제하기 전에 언로드하세요."
+     }
+    }
+   }
+  },
+  "models.detail.files": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Files"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "파일"
+     }
+    }
+   }
+  },
+  "models.detail.info": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Info"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "정보"
+     }
+    }
+   }
+  },
+  "models.detail.installed": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Installed"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "설치됨"
+     }
+    }
+   }
+  },
+  "models.detail.lastUsed": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Last used"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "마지막 사용"
+     }
+    }
+   }
+  },
+  "models.detail.never": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Never"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "사용한 적 없음"
+     }
+    }
+   }
+  },
+  "models.detail.openRepo": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Open Repository"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "저장소 열기"
+     }
+    }
+   }
+  },
+  "models.detail.revision": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Revision"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "리비전"
+     }
+    }
+   }
+  },
+  "models.detail.run": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Run in Playground"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "플레이그라운드에서 실행"
+     }
+    }
+   }
+  },
+  "models.detail.runtime": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Runtime"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "런타임"
+     }
+    }
+   }
+  },
+  "models.detail.size": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Size on disk"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "디스크 크기"
+     }
+    }
+   }
+  },
+  "models.empty.description": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Analyze and download a Hugging Face model to see it here."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Hugging Face 모델을 분석하고 다운로드하면 여기에 표시됩니다."
+     }
+    }
+   }
+  },
+  "models.empty.title": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "No Models Yet"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "모델이 없습니다"
+     }
+    }
+   }
+  },
+  "models.error.generic": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Something went wrong. Try again."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "문제가 발생했습니다. 다시 시도하세요."
+     }
+    }
+   }
+  },
+  "models.library.count": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "%lld installed"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "설치됨 %lld개"
+     }
+    }
+   }
+  },
+  "models.library.title": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Library"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "보관함"
+     }
+    }
+   }
+  },
+  "models.missingFiles": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Files missing — files were removed outside the app. Delete and reinstall."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "파일 없음 — 앱 외부에서 파일이 삭제되었습니다. 삭제 후 다시 설치하세요."
+     }
+    }
+   }
+  },
+  "models.orphans.message": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "These folders contain model files the app no longer tracks. Remove them to reclaim space."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "앱이 더 이상 추적하지 않는 모델 파일 폴더입니다. 삭제하면 공간을 확보할 수 있습니다."
+     }
+    }
+   }
+  },
+  "models.orphans.remove": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Remove"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "제거"
+     }
+    }
+   }
+  },
+  "models.orphans.title": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Unregistered Folders"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "등록되지 않은 폴더"
+     }
+    }
+   }
+  },
+  "models.runtime.picker": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Runtime"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "런타임"
+     }
+    }
+   }
+  },
+  "models.runtime.unsupported": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "No supported runtime on this device yet."
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "이 기기에서 지원하는 런타임이 아직 없습니다."
+     }
+    }
+   }
+  },
+  "models.search.placeholder": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Search models"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "모델 검색"
+     }
+    }
+   }
+  },
+  "models.sort.name": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Name"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "이름"
+     }
+    }
+   }
+  },
+  "models.sort.recent": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Recently Used"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "최근 사용"
+     }
+    }
+   }
+  },
+  "models.sort.size": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Size"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "크기"
+     }
+    }
+   }
+  },
+  "models.storage.cache": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Download cache"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "다운로드 캐시"
+     }
+    }
+   }
+  },
+  "models.storage.models": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Models"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "모델"
+     }
+    }
+   }
+  },
+  "models.storage.title": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Storage"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "저장 공간"
+     }
+    }
+   }
+  },
+  "models.storage.total": {
+   "localizations": {
+    "en": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "Total"
+     }
+    },
+    "ko": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "합계"
+     }
+    }
+   }
+  }
+ },
+ "version": "1.0"
+}
