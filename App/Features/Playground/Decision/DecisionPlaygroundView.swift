@@ -6,10 +6,6 @@ import LocallyRuntime
 /// builder (with a raw-JSON toggle), and result cards. Every value shown
 /// comes from a real runtime event or the schema parser — nothing is
 /// simulated.
-///
-/// Integration: `PlaygroundView`'s modality switch should route
-/// `.decision` models here; this file deliberately does not edit that
-/// switch (owned by another change).
 struct DecisionPlaygroundView: View {
     @State private var viewModel: DecisionPlaygroundViewModel
     private let model: ModelDescriptor
