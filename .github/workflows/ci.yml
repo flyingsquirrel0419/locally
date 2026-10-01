@@ -47,6 +47,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Cache llama.cpp Apple build
+        uses: actions/cache@v4
+        with:
+          path: .deps/llama-apple
+          key: llama-apple-v0.5.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Build llama.cpp Apple xcframework (iOS device + simulator)
+        run: scripts/build-llama-apple.sh
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Validate string catalogs and entitlements

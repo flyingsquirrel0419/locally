@@ -101,6 +101,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.tests
         SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   Locally:
     build:

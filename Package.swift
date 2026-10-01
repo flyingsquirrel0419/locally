@@ -98,12 +98,20 @@ if linuxLlamaAvailable {
 }
 #else
 // Apple: official xcframework from the llama.cpp release whose commit is the
-// v0.5.0 tag (b11146). See DEPENDENCIES.md.
-targets.append(.binaryTarget(
-    name: "llama",
-    url: "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-xcframework.zip",
-    checksum: "1c306afe9fe68a90c4bdc74619d8558d6e0754f085deb105dd2d70293a9a964f"
-))
+// v0.5.0 tag (b11146). See DEPENDENCIES.md. That release ships iOS-device and
+// macOS slices only — no iOS Simulator — so CI builds a local xcframework
+// with a simulator slice via scripts/build-llama-apple.sh into
+// .deps/llama-apple/llama.xcframework; when present, that local path wins.
+let appleLocalXCFramework = "\(packageRoot)/.deps/llama-apple/llama.xcframework"
+if FileManager.default.fileExists(atPath: "\(appleLocalXCFramework)/Info.plist") {
+    targets.append(.binaryTarget(name: "llama", path: ".deps/llama-apple/llama.xcframework"))
+} else {
+    targets.append(.binaryTarget(
+        name: "llama",
+        url: "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-xcframework.zip",
+        checksum: "1c306afe9fe68a90c4bdc74619d8558d6e0754f085deb105dd2d70293a9a964f"
+    ))
+}
 targets.append(.target(name: "LocallyLlama", dependencies: ["llama"]))
 let runtimeIndex = targets.firstIndex { $0.name == "LocallyRuntime" }!
 targets[runtimeIndex] = .target(

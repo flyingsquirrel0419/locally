@@ -1,161 +1,422 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "hf.section.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hugging Face" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Hugging Face" } }
+  "sourceLanguage": "en",
+  "strings": {
+    "hf.section.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hugging Face"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hugging Face"
+          }
+        }
       }
     },
-    "hf.token.placeholder" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Access token (hf_…)" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "액세스 토큰 (hf_…)" } }
+    "hf.token.placeholder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access token (hf_…)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "액세스 토큰 (hf_…)"
+          }
+        }
       }
     },
-    "hf.token.save" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save token" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "토큰 저장" } }
+    "hf.token.save": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save token"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "토큰 저장"
+          }
+        }
       }
     },
-    "hf.token.verify" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Verify" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "확인" } }
+    "hf.token.verify": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verify"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "확인"
+          }
+        }
       }
     },
-    "hf.token.remove" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove token" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "토큰 삭제" } }
+    "hf.token.remove": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove token"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "토큰 삭제"
+          }
+        }
       }
     },
-    "hf.connected.as" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connected as %@" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "%@ 계정으로 연결됨" } }
+    "hf.connected.as": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected as %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 계정으로 연결됨"
+          }
+        }
       }
     },
-    "hf.token.footer" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The token is stored in the Keychain and is only used for Hugging Face requests." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "토큰은 키체인에 저장되며 Hugging Face 요청에만 사용됩니다." } }
+    "hf.token.footer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The token is stored in the Keychain and is only used for Hugging Face requests."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "토큰은 키체인에 저장되며 Hugging Face 요청에만 사용됩니다."
+          }
+        }
       }
     },
-    "models.add.button" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add model" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "모델 추가" } }
+    "models.add.button": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add model"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모델 추가"
+          }
+        }
       }
     },
-    "models.add.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add Model" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "모델 추가" } }
+    "models.add.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Model"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모델 추가"
+          }
+        }
       }
     },
-    "models.add.placeholder" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "org/name or Hugging Face link" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "org/이름 또는 Hugging Face 링크" } }
+    "models.add.placeholder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "org/name or Hugging Face link"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "org/이름 또는 Hugging Face 링크"
+          }
+        }
       }
     },
-    "models.add.analyzing" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Analyzing…" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "분석 중…" } }
+    "models.add.analyzing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyzing…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "분석 중…"
+          }
+        }
       }
     },
-    "models.add.analyze" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Analyze" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "분석" } }
+    "models.add.analyze": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyze"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "분석"
+          }
+        }
       }
     },
-    "models.add.cancel" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "취소" } }
+    "models.add.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "취소"
+          }
+        }
       }
     },
-    "models.result.type" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Type" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "유형" } }
+    "models.result.type": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "유형"
+          }
+        }
       }
     },
-    "models.result.parameters" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Parameters" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "파라미터" } }
+    "models.result.parameters": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parameters"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파라미터"
+          }
+        }
       }
     },
-    "models.result.quantization" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Quantization" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "양자화" } }
+    "models.result.quantization": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantization"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "양자화"
+          }
+        }
       }
     },
-    "models.result.downloadSize" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Download size" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드 크기" } }
+    "models.result.downloadSize": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download size"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다운로드 크기"
+          }
+        }
       }
     },
-    "models.result.formats" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Formats" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "포맷" } }
+    "models.result.formats": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formats"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "포맷"
+          }
+        }
       }
     },
-    "models.result.context" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Context length" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "컨텍스트 길이" } }
+    "models.result.context": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Context length"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨텍스트 길이"
+          }
+        }
       }
     },
-    "models.result.files" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Files to download (%lld)" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드할 파일 (%lld개)" } }
+    "models.result.files": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files to download (%lld)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다운로드할 파일 (%lld개)"
+          }
+        }
       }
     },
-    "models.result.estimate" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Estimate" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "추정치" } }
+    "models.result.estimate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimate"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추정치"
+          }
+        }
       }
     },
-    "models.result.weightMemory" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Weight memory (Estimate)" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "가중치 메모리 (추정치)" } }
+    "models.result.weightMemory": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weight memory (Estimate)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가중치 메모리 (추정치)"
+          }
+        }
       }
     },
-    "models.result.remoteCodeWarning" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "This repository requires running custom code and is not supported." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이 저장소는 사용자 정의 코드 실행이 필요하여 지원되지 않습니다." } }
+    "models.result.remoteCodeWarning": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This repository requires running custom code and is not supported."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 저장소는 사용자 정의 코드 실행이 필요하여 지원되지 않습니다."
+          }
+        }
       }
     },
-    "models.result.estimate.footer" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Estimate only — full device compatibility analysis runs after download." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "추정치입니다 — 전체 기기 호환성 분석은 다운로드 후 실행됩니다." } }
+    "models.result.estimate.footer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimate only — full device compatibility analysis runs after download."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추정치입니다 — 전체 기기 호환성 분석은 다운로드 후 실행됩니다."
+          }
+        }
       }
     },
-    "hf.error.keychain" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't access the Keychain." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "키체인에 접근할 수 없습니다." } }
+    "hf.error.keychain": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't access the Keychain."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "키체인에 접근할 수 없습니다."
+          }
+        }
       }
     },
-    "hf.error.unknown" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Something went wrong. Try again." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "문제가 발생했습니다. 다시 시도하세요." } }
+    "hf.error.unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Something went wrong. Try again."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "문제가 발생했습니다. 다시 시도하세요."
+          }
+        }
       }
     }
-  }
+  },
+  "version": "1.0"
 }
