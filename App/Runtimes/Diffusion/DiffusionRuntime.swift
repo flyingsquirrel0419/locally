@@ -215,40 +215,63 @@ public final class DiffusionRuntime: ModelCompatibleRuntime, @unchecked Sendable
                 continuation.yield(.preparing("Loading model"))
                 let started = Date()
                 do {
-                    var configuration = PipelineConfiguration(prompt: plan.prompt)
-                    configuration.negativePrompt = plan.negativePrompt
-                    configuration.stepCount = plan.stepCount
-                    configuration.seed = plan.seed
-                    configuration.guidanceScale = plan.guidanceScale
-                    configuration.imageCount = plan.imageCount
-                    configuration.schedulerType = .dpmSolverMultistepScheduler
+                    // PipelineConfiguration holds CGImage fields and is not
+                    // Sendable, so it cannot cross into the detached task;
+                    // capture the plan's primitive (Sendable) fields and
+                    // build the configuration inside the closure instead.
+                    let prompt = plan.prompt
+                    let negativePrompt = plan.negativePrompt
+                    let stepCount = plan.stepCount
+                    let seed = plan.seed
+                    let guidanceScale = plan.guidanceScale
+                    let imageCount = plan.imageCount
 
-                    let images: [CGImage?] = try await withCheckedThrowingContinuation { probe in
-                        // Capture `box` (Sendable) rather than the non-Sendable
-                        // pipeline protocol; dereference inside the detached task.
-                        Task.detached(priority: .userInitiated) { [box, configuration, state] in
-                            do {
-                                let result = try box.value.generateImages(
-                                    configuration: configuration
-                                ) { progress -> Bool in
-                                    let done = progress.step + 1
-                                    continuation.yield(.progress(
-                                        Double(done) / Double(progress.stepCount),
-                                        phase: "Step \(done) / \(progress.stepCount)"))
-                                    if Task.isCancelled {
-                                        Task { await state.cancel() }
-                                        return false
+                    // Task.detached children cannot see Task.isCancelled of
+                    // the caller, so cancellation flows through this flag:
+                    // withTaskCancellationHandler sets it and the pipeline's
+                    // progressHandler returns false to abort sampling.
+                    let cancelled = CancellationFlag()
+
+                    let images: [CGImage?] = try await withTaskCancellationHandler {
+                        try await withCheckedThrowingContinuation { probe in
+                            // Capture `box` (Sendable) rather than the non-
+                            // Sendable pipeline protocol; dereference inside
+                            // the detached task.
+                            Task.detached(priority: .userInitiated) {
+                                [box, prompt, negativePrompt, stepCount, seed,
+                                 guidanceScale, imageCount, cancelled, state] in
+                                var configuration = PipelineConfiguration(prompt: prompt)
+                                configuration.negativePrompt = negativePrompt
+                                configuration.stepCount = stepCount
+                                configuration.seed = seed
+                                configuration.guidanceScale = guidanceScale
+                                configuration.imageCount = imageCount
+                                configuration.schedulerType = .dpmSolverMultistepScheduler
+                                do {
+                                    let result = try box.value.generateImages(
+                                        configuration: configuration
+                                    ) { progress -> Bool in
+                                        let done = progress.step + 1
+                                        continuation.yield(.progress(
+                                            Double(done) / Double(progress.stepCount),
+                                            phase: "Step \(done) / \(progress.stepCount)"))
+                                        if cancelled.isCancelled {
+                                            Task { await state.cancel() }
+                                            return false
+                                        }
+                                        return true
                                     }
-                                    return true
+                                    probe.resume(returning: result)
+                                } catch {
+                                    probe.resume(throwing: error)
                                 }
-                                probe.resume(returning: result)
-                            } catch {
-                                probe.resume(throwing: error)
                             }
                         }
+                    } onCancel: {
+                        cancelled.cancel()
                     }
 
-                    if Task.isCancelled {
+                    if cancelled.isCancelled {
                         continuation.yield(.failed(.cancelled))
                         continuation.finish()
                         return
