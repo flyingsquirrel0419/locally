@@ -493,3 +493,16 @@ the library is linked and a Metal device exists — the simulator reports
 consume the same `TextGenerationSession` (system prompt + turns) and
 `GenerationParameters` from LocallyRuntime, so the playground UI and
 controls are runtime-agnostic; only the load/execute paths differ.
+
+## Week 7/10 fixes
+
+**MLXRuntime memory limit comes from `MemoryBudget.safeAIBudget`, not a
+private fraction.** Previously MLXRuntime applied its own 55% fraction and
+a 25% cache fraction independent of the shared budget. The runtime now
+calls the same `MemoryBudget.safeAIBudget` the compatibility engine and
+device profiler use, so every layer reports and obeys one number.
+`MLX.Memory.cacheLimit` is a small fixed cap (64 MB): large enough that
+the decode loop isn't re-allocating Metal temporaries per token, small
+enough that a memory warning actually frees memory the allocator would
+otherwise hold on to. The previous 25%-of-physical cache (multi-GB on
+modern iPhones) was effectively unbounded for iOS.
