@@ -22,7 +22,9 @@ actor LlamaBridge {
     /// Process-wide backend lifecycle. llama_backend_init is not
     /// reference-counted, so gate it behind a one-time flag.
     private static let backendLock = NSLock()
-    private static var backendStarted = false
+    // Protected by `backendLock`; nonisolated(unsafe) because Swift 6 strict
+    // concurrency cannot see the NSLock guard.
+    private nonisolated(unsafe) static var backendStarted = false
 
     static func ensureBackend() {
         backendLock.lock()

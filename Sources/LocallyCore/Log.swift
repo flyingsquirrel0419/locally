@@ -25,7 +25,9 @@ public enum Log {
 
     #if canImport(os)
     private static let lock = NSLock()
-    private static var loggers: [Category: os.Logger] = [:]
+    // Protected by `lock`; marked nonisolated(unsafe) because Swift 6 strict
+    // concurrency cannot see the NSLock guard.
+    private nonisolated(unsafe) static var loggers: [Category: os.Logger] = [:]
 
     private static func logger(for category: Category) -> os.Logger {
         lock.lock()

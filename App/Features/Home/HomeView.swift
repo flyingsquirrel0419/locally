@@ -4,6 +4,7 @@ import LocallyDevice
 import LocallyStorage
 
 @Observable
+@MainActor
 final class HomeViewModel {
     var profile: DeviceProfile?
     var benchmark: BenchmarkResult?

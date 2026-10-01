@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make gcc g++
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make gcc g++ python3
       - name: Cache llama.cpp build
         uses: actions/cache@v4
         with:
