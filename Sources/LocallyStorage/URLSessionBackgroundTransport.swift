@@ -16,11 +16,17 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
 
     public typealias TransferID = Int
 
-    private let lock = NSLock()
+    private struct State {
+        var nextID: TransferID = 1
+        var tasksByID: [TransferID: URLSessionDownloadTask] = [:]
+        var destinations: [TransferID: URL] = [:]
+    }
+
+    // NSLock.lock()/unlock() are unavailable from async contexts under the
+    // Swift 6 SDK; LockedState.withLock is a sync entry point, so calling it
+    // from async methods is permitted.
+    private let state = LockedState(State())
     private var session: URLSession!
-    private var nextID: TransferID = 1
-    private var tasksByID: [TransferID: URLSessionDownloadTask] = [:]
-    private var destinations: [TransferID: URL] = [:]
 
     private let eventStream: AsyncStream<(TransferID, DownloadTransportEvent)>
     private let eventContinuation: AsyncStream<(TransferID, DownloadTransportEvent)>.Continuation
@@ -54,15 +60,15 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
     private func reattachExistingTasks() {
         session.getAllTasks { [weak self] tasks in
             guard let self else { return }
-            self.lock.lock()
-            defer { self.lock.unlock() }
-            for task in tasks {
-                guard let download = task as? URLSessionDownloadTask,
-                      let description = task.taskDescription,
-                      !description.isEmpty else { continue }
-                let id = self.nextID
-                self.nextID += 1
-                self.tasksByID[id] = download
+            self.state.withLock { state in
+                for task in tasks {
+                    guard let download = task as? URLSessionDownloadTask,
+                          let description = task.taskDescription,
+                          !description.isEmpty else { continue }
+                    let id = state.nextID
+                    state.nextID += 1
+                    state.tasksByID[id] = download
+                }
             }
         }
     }
@@ -70,11 +76,12 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
     public var events: AsyncStream<(TransferID, DownloadTransportEvent)> { eventStream }
 
     public func start(request: URLRequest, resumeData: Data?, destination: URL) async throws -> TransferID {
-        lock.lock()
-        let id = nextID
-        nextID += 1
-        destinations[id] = destination
-        lock.unlock()
+        let id = state.withLock { state -> TransferID in
+            let id = state.nextID
+            state.nextID += 1
+            state.destinations[id] = destination
+            return id
+        }
 
         let task: URLSessionDownloadTask
         if let resumeData {
@@ -85,17 +92,13 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
         // taskDescription carries the correlation across process restarts.
         task.taskDescription = "\(id)"
         task.resume()
-        lock.lock()
-        tasksByID[id] = task
-        lock.unlock()
+        state.withLock { $0.tasksByID[id] = task }
         return id
     }
 
     public func pause(_ id: TransferID) async -> Data? {
         await withCheckedContinuation { continuation in
-            lock.lock()
-            let task = tasksByID[id]
-            lock.unlock()
+            let task = state.withLock { $0.tasksByID[id] }
             guard let task else {
                 continuation.resume(returning: nil)
                 return
@@ -107,10 +110,10 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
     }
 
     public func cancel(_ id: TransferID) async {
-        lock.lock()
-        let task = tasksByID.removeValue(forKey: id)
-        destinations.removeValue(forKey: id)
-        lock.unlock()
+        let task = state.withLock { state -> URLSessionDownloadTask? in
+            state.destinations.removeValue(forKey: id)
+            return state.tasksByID.removeValue(forKey: id)
+        }
         task?.cancel()
     }
 
@@ -127,10 +130,10 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                            didFinishDownloadingTo location: URL) {
         guard let id = idFor(downloadTask) else { return }
-        lock.lock()
-        let destination = destinations.removeValue(forKey: id)
-        tasksByID.removeValue(forKey: id)
-        lock.unlock()
+        let destination = state.withLock { state -> URL? in
+            state.tasksByID.removeValue(forKey: id)
+            return state.destinations.removeValue(forKey: id)
+        }
         if let http = downloadTask.response as? HTTPURLResponse, http.statusCode >= 400 {
             eventContinuation.yield((id, .failed(error: HTTPStatusError(statusCode: http.statusCode),
                                                  resumeData: nil)))
@@ -167,9 +170,7 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
         guard let error, let download = task as? URLSessionDownloadTask,
               let id = idFor(download) else { return }
         let resumeData = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data
-        lock.lock()
-        tasksByID.removeValue(forKey: id)
-        lock.unlock()
+        state.withLock { _ = $0.tasksByID.removeValue(forKey: id) }
         eventContinuation.yield((id, .failed(error: error, resumeData: resumeData)))
     }
 
@@ -178,9 +179,7 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
     }
 
     private func idFor(_ task: URLSessionDownloadTask) -> TransferID? {
-        lock.lock()
-        defer { lock.unlock() }
-        return tasksByID.first(where: { $0.value == task })?.key
+        state.withLock { $0.tasksByID.first(where: { $0.value == task })?.key }
     }
 }
 
@@ -188,21 +187,16 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
 public final class BackgroundSessionCoordinator: @unchecked Sendable {
     public static let shared = BackgroundSessionCoordinator()
 
-    private let lock = NSLock()
-    private var handlers: [String: () -> Void] = [:]
+    private let handlers = LockedState<[String: () -> Void]>([:])
 
     private init() {}
 
     public func registerCompletionHandler(_ handler: @escaping () -> Void, for identifier: String) {
-        lock.lock()
-        handlers[identifier] = handler
-        lock.unlock()
+        handlers.withLock { $0[identifier] = handler }
     }
 
     public func invokeCompletionHandler(for identifier: String) {
-        lock.lock()
-        let handler = handlers.removeValue(forKey: identifier)
-        lock.unlock()
+        let handler = handlers.withLock { $0.removeValue(forKey: identifier) }
         handler?()
     }
 }

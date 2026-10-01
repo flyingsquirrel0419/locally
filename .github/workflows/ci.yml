@@ -62,10 +62,23 @@ jobs:
           plutil -lint App/Locally.entitlements
       - name: Test (includes app build and app smoke tests)
         run: |
+          # Keep compiling after the first error so one run reports failures
+          # from all targets instead of one module per CI iteration.
+          defaults write com.apple.dt.Xcode IDEBuildingContinueBuildingAfterErrors -bool YES
+          set -o pipefail
           xcodebuild test \
             -project Locally.xcodeproj \
             -scheme Locally \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -skipMacroValidation \
             -skipPackagePluginValidation \
-            -quiet
+            -quiet 2>&1 | tee xcodebuild.log
+      - name: Surface build errors in step summary
+        if: failure()
+        run: |
+          {
+            echo "### xcodebuild errors"
+            echo '```'
+            grep -E "error:" xcodebuild.log | sed 's/^.*Z //' | sort -u | head -100
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
