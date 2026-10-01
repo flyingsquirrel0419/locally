@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import LocallyCore
 
 /// Persistent registry of installed models. Records live in
@@ -30,7 +29,7 @@ public actor ModelRegistry {
     private let layout: FilesystemLayout
     private let loadedChecker: any ModelLoadedChecking
     private let now: @Sendable () -> Date
-    private let state: Mutex<[String: InstalledModel]>
+    private let state: LockedState<[String: InstalledModel]>
 
     public init(root: URL,
                 loadedChecker: any ModelLoadedChecking = NoModelLoadedChecker(),
@@ -39,7 +38,7 @@ public actor ModelRegistry {
         self.layout = FilesystemLayout(root: root)
         self.loadedChecker = loadedChecker
         self.now = now
-        self.state = Mutex([:])
+        self.state = LockedState([:])
     }
 
     /// Default registry under Application Support, for the app layer.

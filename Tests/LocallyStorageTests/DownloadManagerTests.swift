@@ -1,11 +1,10 @@
 import XCTest
-import Synchronization
 @testable import LocallyStorage
 import LocallyCore
 
 /// Thread-safe recorder for injected sleep intervals.
 final class SleepRecorder: Sendable {
-    private let intervals = Mutex<[TimeInterval]>([])
+    private let intervals = LockedState<[TimeInterval]>([])
     func record(_ t: TimeInterval) { intervals.withLock { $0.append(t) } }
     var all: [TimeInterval] { intervals.withLock { $0 } }
 }

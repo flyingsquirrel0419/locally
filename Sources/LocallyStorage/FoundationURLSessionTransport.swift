@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 import LocallyCore
-import Synchronization
+
 
 /// Cross-platform URLSession transport (default on Linux and macOS).
 /// Uses a delegate-based download task so it works with
@@ -22,7 +22,7 @@ public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
         var tasks: [TransferID: URLSessionDownloadTask] = [:]
         var destinations: [TransferID: URL] = [:]
     }
-    private let state = Mutex(State())
+    private let state = LockedState(State())
 
     private let eventStream: AsyncStream<(TransferID, DownloadTransportEvent)>
     private let eventContinuation: AsyncStream<(TransferID, DownloadTransportEvent)>.Continuation
