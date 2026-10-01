@@ -13,6 +13,7 @@ public enum LocallyError: Error, Sendable, Hashable {
     case insufficientMemory(userMessage: String, technicalDetail: String)
     case runtimeUnavailable(userMessage: String, technicalDetail: String)
     case inferenceFailed(userMessage: String, technicalDetail: String)
+    case contextOverflow(userMessage: String, technicalDetail: String)
     case cancelled
     case storageCorrupted(userMessage: String, technicalDetail: String)
     case pathTraversal(technicalDetail: String)
@@ -25,6 +26,7 @@ public enum LocallyError: Error, Sendable, Hashable {
              .unsupportedModality(let m, _), .unsupportedFormat(let m, _),
              .insufficientStorage(let m, _), .insufficientMemory(let m, _),
              .runtimeUnavailable(let m, _), .inferenceFailed(let m, _),
+             .contextOverflow(let m, _),
              .storageCorrupted(let m, _), .unknown(let m, _):
             return m
         case .cancelled:
@@ -41,6 +43,7 @@ public enum LocallyError: Error, Sendable, Hashable {
              .unsupportedModality(_, let d), .unsupportedFormat(_, let d),
              .insufficientStorage(_, let d), .insufficientMemory(_, let d),
              .runtimeUnavailable(_, let d), .inferenceFailed(_, let d),
+             .contextOverflow(_, let d),
              .storageCorrupted(_, let d), .pathTraversal(let d),
              .unknown(_, let d):
             return d

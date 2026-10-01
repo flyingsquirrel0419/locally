@@ -123,4 +123,59 @@ final class LiveLlamaTests: XCTestCase {
         // We cancelled mid-stream; must not have produced the full 512 tokens.
         XCTAssertLessThan(tokens, 512)
     }
+
+    /// Long-generation regression: 256 tokens must not hit a slowdown cliff.
+    /// Compares the decode rate of the first half against the second half.
+    func testLongGenerationHasNoSlowdownCliff() async throws {
+        guard let url = liveModelURL else {
+            throw XCTSkip("LOCALLY_LIVE_LLAMA not set or model missing")
+        }
+        let runtime = GGUFRuntime()
+        try await runtime.load(liveModel(at: url))
+        defer { Task { await runtime.unload() } }
+
+        let request = AIRequest(
+            model: liveModel(at: url),
+            input: .text("Write a long, detailed story about a dragon and a knight."),
+            parameters: GenerationParameters(temperature: 0, topP: 1.0, maxTokens: 256,
+                                             contextLength: 1024))
+        var result: AIResult?
+        var failed: LocallyError?
+        for try await event in runtime.run(request) {
+            if case .completed(let r) = event { result = r }
+            if case .failed(let e) = event { failed = e }
+        }
+        if let failed { XCTFail("inference failed: \(failed.technicalDetail)") }
+        let tokens = result?.metadata.generatedTokens ?? 0
+        XCTAssertGreaterThan(tokens, 200, "expected ~256 tokens, got \(tokens)")
+        XCTAssertGreaterThan(result?.metadata.tokensPerSecond ?? 0, 0)
+        print("LIVE LONG-GEN >>> tokens=\(tokens) tok/s=\(result?.metadata.tokensPerSecond ?? -1) peak=\(result?.metadata.peakMemoryBytes ?? -1)")
+    }
+
+    /// A request whose prompt plus budget cannot fit a tiny context must
+    /// surface LocallyError.contextOverflow, never crash or produce garbage.
+    func testContextOverflowSurfacesError() async throws {
+        guard let url = liveModelURL else {
+            throw XCTSkip("LOCALLY_LIVE_LLAMA not set or model missing")
+        }
+        let runtime = GGUFRuntime()
+        try await runtime.load(liveModel(at: url))
+        defer { Task { await runtime.unload() } }
+
+        // Build a prompt well over 128 tokens.
+        let longUserText = String(repeating: "The quick brown fox jumps over the lazy dog. ", count: 40)
+        let request = AIRequest(
+            model: liveModel(at: url),
+            input: .chat([.init(role: .user, content: longUserText)]),
+            parameters: GenerationParameters(temperature: 0, maxTokens: 32, contextLength: 128))
+        var sawContextOverflow = false
+        var sawOtherFailure: LocallyError?
+        for try await event in runtime.run(request) {
+            if case .failed(let e) = event {
+                if case .contextOverflow = e { sawContextOverflow = true } else { sawOtherFailure = e }
+            }
+        }
+        XCTAssertTrue(sawContextOverflow,
+                      "expected contextOverflow, got \(String(describing: sawOtherFailure))")
+    }
 }

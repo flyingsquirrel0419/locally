@@ -1,6 +1,10 @@
 import Foundation
 import LocallyCore
 
+#if canImport(Darwin)
+import Darwin
+#endif
+
 #if canImport(CLlama)
 import CLlama
 #elseif canImport(llama)
@@ -33,6 +37,13 @@ actor LlamaBridge {
     private var context: OpaquePointer?
     private var vocab: OpaquePointer?
     private var modelContextLength: Int32 = 0
+    /// Actual n_ctx of the live context (set in beginContext).
+    private(set) var activeContextTokens: Int32 = 0
+    /// Persistent sampler chain for the live context. Rebuilding the chain
+    /// per token was the dominant Swift-side decode cost; create once per
+    /// context and reconfigure in place.
+    private var sampler: UnsafeMutablePointer<llama_sampler>?
+    private var samplerConfig: (temperature: Double, topP: Double, topK: Int?, seed: UInt64?)?
 
     /// Load a validated GGUF file. `nGPULayers` = -1 (all) on Apple/Metal,
     /// 0 (CPU) on Linux.
@@ -55,6 +66,9 @@ actor LlamaBridge {
     }
 
     var contextLength: Int { Int(modelContextLength) }
+
+    /// n_ctx of the currently active decode context (0 when none).
+    var activeContextLength: Int { Int(activeContextTokens) }
 
     /// The model's embedded chat template, or nil when none is stored.
     var chatTemplate: String? {
@@ -133,19 +147,27 @@ actor LlamaBridge {
         let requested = maxContext ?? contextLength
         params.n_ctx = UInt32(clamping: max(requested, 8))
         params.n_batch = min(params.n_ctx, 512)
-        params.n_threads = Int32(ProcessInfo.processInfo.processorCount)
-        params.n_threads_batch = params.n_threads
+        // Active (not logical) cores: matches llama-bench -t <cores> baselines
+        // and respects cgroup / affinity limits on Linux.
+        let threads = Int32(max(1, ProcessInfo.processInfo.activeProcessorCount))
+        params.n_threads = threads
+        params.n_threads_batch = threads
         guard let ctx = llama_init_from_model(model, params) else {
             throw LocallyError.inferenceFailed(
                 userMessage: "Could not create an inference context.",
                 technicalDetail: "llama_init_from_model returned nil")
         }
         context = ctx
+        activeContextTokens = Int32(params.n_ctx)
     }
 
     func endContext() {
+        if let sampler { llama_sampler_free(sampler) }
+        sampler = nil
+        samplerConfig = nil
         if let context { llama_free(context) }
         context = nil
+        activeContextTokens = 0
     }
 
     func tokenize(_ text: String, addSpecial: Bool) throws -> [llama_token] {
@@ -186,20 +208,25 @@ actor LlamaBridge {
         }
     }
 
-    /// Sample the next token with the given chain parameters. Greedy when
-    /// temperature == 0.
-    func sampleNext(temperature: Double, topP: Double, topK: Int?, seed: UInt64?) throws -> llama_token {
-        guard let context else {
-            throw LocallyError.runtimeUnavailable(
-                userMessage: "No context is active.", technicalDetail: "sample without context")
+    /// Build (or rebuild when the config changed) the persistent sampler
+    /// chain. Greedy when temperature == 0.
+    private func ensureSampler(temperature: Double, topP: Double, topK: Int?,
+                               seed: UInt64?) throws -> UnsafeMutablePointer<llama_sampler> {
+        let config = (temperature: temperature, topP: topP, topK: topK, seed: seed)
+        if let sampler, let existing = samplerConfig,
+           existing.temperature == config.temperature, existing.topP == config.topP,
+           existing.topK == config.topK, existing.seed == config.seed {
+            return sampler
         }
+        if let sampler { llama_sampler_free(sampler) }
+        sampler = nil
+        samplerConfig = nil
         let chainParams = llama_sampler_chain_default_params()
         guard let chain = llama_sampler_chain_init(chainParams) else {
             throw LocallyError.inferenceFailed(
                 userMessage: "Could not initialize sampling.",
                 technicalDetail: "llama_sampler_chain_init returned nil")
         }
-        defer { llama_sampler_free(chain) }
         if temperature <= 0 {
             llama_sampler_chain_add(chain, llama_sampler_init_greedy())
         } else {
@@ -209,7 +236,48 @@ actor LlamaBridge {
             let seed32 = seed.map { UInt32(truncatingIfNeeded: $0) } ?? UInt32(LLAMA_DEFAULT_SEED)
             llama_sampler_chain_add(chain, llama_sampler_init_dist(seed32))
         }
+        sampler = chain
+        samplerConfig = config
+        return chain
+    }
+
+    /// Sample the next token from the current context state. Prefer
+    /// `generateNext` in the decode loop — it avoids extra actor hops.
+    func sampleNext(temperature: Double, topP: Double, topK: Int?, seed: UInt64?) throws -> llama_token {
+        guard let context else {
+            throw LocallyError.runtimeUnavailable(
+                userMessage: "No context is active.", technicalDetail: "sample without context")
+        }
+        let chain = try ensureSampler(temperature: temperature, topP: topP, topK: topK, seed: seed)
         return llama_sampler_sample(chain, context, -1)
+    }
+
+    /// One decode step: sample from current logits, report EOG, decode the
+    /// token back into the context (unless it ended generation), and return
+    /// its raw piece bytes. Fused so each generated token costs one actor
+    /// hop instead of four.
+    func generateNext(temperature: Double, topP: Double, topK: Int?,
+                      seed: UInt64?) throws -> (token: llama_token, piece: [UInt8], isEOG: Bool) {
+        guard let context else {
+            throw LocallyError.runtimeUnavailable(
+                userMessage: "No context is active.", technicalDetail: "sample without context")
+        }
+        let chain = try ensureSampler(temperature: temperature, topP: topP, topK: topK, seed: seed)
+        let token = llama_sampler_sample(chain, context, -1)
+        if let vocab, llama_vocab_is_eog(vocab, token) {
+            return (token, [], true)
+        }
+        let piece = tokenPiece(token)
+        var mutable: [llama_token] = [token]
+        let rc = mutable.withUnsafeMutableBufferPointer { buf in
+            llama_decode(context, llama_batch_get_one(buf.baseAddress, 1))
+        }
+        guard rc == 0 else {
+            throw LocallyError.inferenceFailed(
+                userMessage: "The model failed while generating text.",
+                technicalDetail: "llama_decode returned \(rc) during token generation")
+        }
+        return (token, piece, false)
     }
 
     func isEndOfGeneration(_ token: llama_token) -> Bool {
@@ -234,6 +302,34 @@ actor LlamaBridge {
     func usedContextTokens() -> Int {
         guard let context else { return 0 }
         return Int(llama_memory_seq_pos_max(llama_get_memory(context), 0)) + 1
+    }
+
+    /// Approximate process resident memory in bytes. llama.cpp does not
+    /// expose a per-model memory counter through the C API, so this samples
+    /// process-level RSS (Linux /proc/self/statm) or physical footprint
+    /// (Apple task_info). Approximate: it covers the whole process, not just
+    /// this model.
+    func residentMemoryBytes() -> Int64? {
+        #if os(Linux)
+        guard let text = try? String(contentsOfFile: "/proc/self/statm", encoding: .ascii) else {
+            return nil
+        }
+        let fields = text.split(separator: " ")
+        guard fields.count >= 2, let residentPages = Int64(fields[1]) else { return nil }
+        return residentPages &* Int64(sysconf(Int32(_SC_PAGESIZE)))
+        #elseif canImport(Darwin)
+        var info = mach_vm_basic_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_vm_basic_info_data_t>.stride / MemoryLayout<integer_t>.stride)
+        let kr: kern_return_t = withUnsafeMutablePointer(to: &info) { ptr in
+            ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                task_info(mach_task_self_, task_flavor_t(MACH_VM_BASIC_INFO), intPtr, &count)
+            }
+        }
+        guard kr == KERN_SUCCESS else { return nil }
+        return Int64(info.resident_size)
+        #else
+        return nil
+        #endif
     }
 
     func unload() {

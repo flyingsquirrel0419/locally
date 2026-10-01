@@ -8,3 +8,5 @@ Package.resolved
 .claude/
 .deps/
 Sources/CLlama/include
+# Worktree-local symlink into the shared dependency dir (created by workers).
+/.deps

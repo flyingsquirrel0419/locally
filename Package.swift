@@ -15,11 +15,25 @@ import Foundation
 let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
 let linuxInstallDir = ".deps/llama-install"
 let linuxInstallAbs = "\(packageRoot)/\(linuxInstallDir)"
+let clamaDir = "\(packageRoot)/Sources/CLlama"
+// CLlama/shim.h includes "include/llama.h" where `include` is a symlink
+// (gitignored) into the install dir. A fresh checkout has the install dir
+// but not the symlink; recreate it here so Package.swift never builds a
+// module whose header is unresolvable.
+func resolveCLlamaInclude() -> Bool {
+    let fm = FileManager.default
+    let headerViaLink = "\(clamaDir)/include/llama.h"
+    if fm.fileExists(atPath: headerViaLink) { return true }
+    let installedInclude = "\(linuxInstallAbs)/include"
+    guard fm.fileExists(atPath: "\(installedInclude)/llama.h") else { return false }
+    // Symlink missing or broken: try to (re)create it.
+    try? fm.removeItem(atPath: "\(clamaDir)/include")
+    try? fm.createSymbolicLink(atPath: "\(clamaDir)/include", withDestinationPath: installedInclude)
+    return fm.fileExists(atPath: headerViaLink)
+}
 let linuxLlamaAvailable: Bool = {
     let forced = ProcessInfo.processInfo.environment["LOCALLY_LLAMA"] == "1"
-    let installed = FileManager.default.fileExists(
-        atPath: "\(linuxInstallAbs)/include/llama.h")
-    return forced || installed
+    return forced || resolveCLlamaInclude()
 }()
 
 var targets: [Target] = [

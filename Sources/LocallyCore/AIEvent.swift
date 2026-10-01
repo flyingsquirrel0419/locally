@@ -114,6 +114,10 @@ public struct InferenceMetadata: Codable, Sendable, Hashable {
     public var ttft: TimeInterval?
     public var tokensPerSecond: Double?
     public var generatedTokens: Int?
+    /// Approximate process resident memory sampled at end of run. The
+    /// llama.cpp C API does not expose a per-model counter, so this reads
+    /// process-level RSS (Linux /proc/self/statm) or physical footprint
+    /// (Apple task_info); it covers the whole process, not just the model.
     public var peakMemoryBytes: Int64?
 
     public init(
