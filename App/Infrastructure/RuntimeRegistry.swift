@@ -24,7 +24,7 @@ final class RuntimeRegistry {
     private(set) var loadedRepoID: String?
 
     init(runtimes: [any ModelCompatibleRuntime]? = nil) {
-        let runtimes = runtimes ?? [GGUFRuntime(), MLXRuntime()]
+        let runtimes = runtimes ?? [GGUFRuntime(), MLXRuntime(), DiffusionRuntime()]
         self.runtimes = runtimes
         self.router = RuntimeRouter(runtimes: runtimes)
         self.device = RuntimeRegistry.probeDevice()

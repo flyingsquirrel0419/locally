@@ -131,10 +131,46 @@ final class RepositoryAnalyzerTests: XCTestCase {
             reference: try reference("sd-community/tiny-sd")
         )
         XCTAssertEqual(descriptor.modality, .imageGeneration)
-        XCTAssertEqual(descriptor.supportedRuntimes, [.diffusion])
+        // Diffusers-format (safetensors UNet) repos cannot run on-device:
+        // honestly unsupported until converted to Core ML.
+        XCTAssertEqual(descriptor.supportedRuntimes, [])
+        XCTAssertNotNil(descriptor.metadata["unsupported_reason"])
         let paths = descriptor.requiredFiles.map(\.path)
         XCTAssertTrue(paths.contains("unet/diffusion_pytorch_model.safetensors"))
         XCTAssertTrue(paths.contains("vae/diffusion_pytorch_model.safetensors"))
+    }
+
+    func testCoreMLDiffusionPicksSplitEinsumArchiveVariant() throws {
+        let info = try Fixtures.repoInfo("diffusion-coreml")
+        let descriptor = analyzer.analyze(
+            info: info, configs: [:], frontMatter: nil, safetensorsHeader: nil,
+            reference: try reference("apple/coreml-stable-diffusion-2-1-base-palettized")
+        )
+        XCTAssertEqual(descriptor.modality, .imageGeneration)
+        XCTAssertTrue(descriptor.formats.contains(.coreml))
+        XCTAssertEqual(descriptor.supportedRuntimes, [.diffusion])
+        XCTAssertEqual(descriptor.metadata["diffusion_attention"], "split_einsum")
+        XCTAssertEqual(descriptor.metadata["diffusion_form"], "zip")
+        XCTAssertEqual(descriptor.metadata["diffusion_palettized"], "true")
+        XCTAssertEqual(descriptor.metadata["diffusion_resolution"], "512")
+        XCTAssertEqual(descriptor.architectureHints?.diffusionResolution, 512)
+        // Exactly the chosen archive, nothing from either variant folder.
+        let paths = descriptor.requiredFiles.map(\.path)
+        XCTAssertEqual(paths,
+            ["coreml-stable-diffusion-2-1-base-palettized_split_einsum_v2_compiled.zip"])
+        XCTAssertEqual(descriptor.totalDownloadSize, 1141379936)
+    }
+
+    func testNonCoreMLDiffusionIsHonestlyUnsupported() throws {
+        let info = try Fixtures.repoInfo("diffusion-sd")
+        let descriptor = analyzer.analyze(
+            info: info, configs: try configs(for: "diffusion-sd"), frontMatter: nil,
+            safetensorsHeader: nil,
+            reference: try reference("sd-community/tiny-sd")
+        )
+        XCTAssertEqual(descriptor.modality, .imageGeneration)
+        XCTAssertEqual(descriptor.supportedRuntimes, [])
+        XCTAssertNotNil(descriptor.metadata["unsupported_reason"])
     }
 
     func testWhisperSpeechRecognition() throws {

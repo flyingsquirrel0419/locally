@@ -81,4 +81,40 @@ final class LiveHFCheckTests: XCTestCase {
           quant meta:  \(descriptor.metadata["quantization"] ?? "-")
         """)
     }
+
+    /// Core ML diffusion repo: the analyzer must pick the split_einsum
+    /// compiled archive variant and surface the diffusion runtime, fixed
+    /// resolution, and resource directory from the real HF listing.
+    func testLiveCoreMLDiffusionAnalysis() async throws {
+        guard liveEnabled else {
+            throw XCTSkip("Set LOCALLY_LIVE_HF=1 to run the live Hugging Face check")
+        }
+        let client = HFClient(transport: URLSessionTransport(),
+                              tokenStore: InMemoryTokenStore())
+        let analyzer = RepositoryAnalyzer()
+        let reference = try HFRepoReference(
+            parsing: "apple/coreml-stable-diffusion-2-1-base-palettized")
+        let descriptor = try await analyzer.analyze(reference, client: client)
+
+        print("""
+
+        === LIVE DIFFUSION: \(descriptor.repoID) ===
+          modality:    \(descriptor.modality.rawValue)
+          formats:     \(descriptor.formats.map(\.rawValue).joined(separator: ", "))
+          runtimes:    \(descriptor.supportedRuntimes.map(\.rawValue).joined(separator: ", "))
+          attention:   \(descriptor.metadata["diffusion_attention"] ?? "-")
+          form:        \(descriptor.metadata["diffusion_form"] ?? "-")
+          resources:   \(descriptor.metadata["diffusion_resources_dir"] ?? "-")
+          resolution:  \(descriptor.metadata["diffusion_resolution"] ?? "-")
+          files:       \(descriptor.requiredFiles.count)
+          download:    \(descriptor.totalDownloadSize.map { "\($0) bytes" } ?? "-")
+        """)
+
+        XCTAssertEqual(descriptor.modality, .imageGeneration)
+        XCTAssertTrue(descriptor.formats.contains(.coreml))
+        XCTAssertEqual(descriptor.supportedRuntimes, [.diffusion])
+        XCTAssertEqual(descriptor.metadata["diffusion_attention"], "split_einsum")
+        XCTAssertEqual(descriptor.metadata["diffusion_resolution"], "512")
+        XCTAssertFalse(descriptor.requiredFiles.isEmpty)
+    }
 }

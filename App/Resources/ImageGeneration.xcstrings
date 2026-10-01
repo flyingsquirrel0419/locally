@@ -1,0 +1,132 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "imagegen.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "취소" } }
+      }
+    },
+    "imagegen.error.empty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No image was produced." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이미지가 생성되지 않았습니다." } }
+      }
+    },
+    "imagegen.error.noRuntime" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No runtime can run this model on this device." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이 기기에서 이 모델을 실행할 수 있는 런타임이 없습니다." } }
+      }
+    },
+    "imagegen.generate" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Generate" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "생성" } }
+      }
+    },
+    "imagegen.guidance" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Guidance" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "가이던스" } }
+      }
+    },
+    "imagegen.negative.placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Negative prompt (optional)" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "네거티브 프롬프트 (선택 사항)" } }
+      }
+    },
+    "imagegen.prompt.placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Describe the image to generate" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "생성할 이미지를 설명하세요" } }
+      }
+    },
+    "imagegen.resolution.fixed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This model always generates at %lld×%lld; Core ML models have a fixed output size." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이 모델은 항상 %lld×%lld로 생성합니다. Core ML 모델은 출력 크기가 고정되어 있습니다." } }
+      }
+    },
+    "imagegen.save" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save to Photos" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "사진에 저장" } }
+      }
+    },
+    "imagegen.saveFailed.denied" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Photo library access was not granted." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "사진 보관함 접근이 허용되지 않았습니다." } }
+      }
+    },
+    "imagegen.saveFailed.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't Save" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "저장할 수 없음" } }
+      }
+    },
+    "imagegen.saved.ok" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "확인" } }
+      }
+    },
+    "imagegen.saved.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved to Photos" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "사진에 저장됨" } }
+      }
+    },
+    "imagegen.seed.placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Seed (empty = random)" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "시드 (비우면 무작위)" } }
+      }
+    },
+    "imagegen.seed.randomize" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Randomize" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "무작위" } }
+      }
+    },
+    "imagegen.share" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Share" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "공유" } }
+      }
+    },
+    "imagegen.share.preview" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Generated image" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "생성된 이미지" } }
+      }
+    },
+    "imagegen.stats.seed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Seed" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "시드" } }
+      }
+    },
+    "imagegen.stats.time" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Time" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "시간" } }
+      }
+    },
+    "imagegen.steps" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Steps" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "단계" } }
+      }
+    },
+    "imagegen.zoom.close" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "닫기" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

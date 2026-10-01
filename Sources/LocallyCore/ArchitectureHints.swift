@@ -21,6 +21,10 @@ public struct ArchitectureHints: Codable, Sendable, Hashable {
     public var visionEncoderParams: Int64?
     /// Bytes per KV cache element (2 = fp16, the common default).
     public var kvCacheDTypeBytes: Int
+    /// Native (fixed) output resolution for Core ML diffusion models, e.g.
+    /// 512 for SD 1.x/2.x, 1024 for SDXL. Core ML shapes are compiled in;
+    /// the runtime cannot resize.
+    public var diffusionResolution: Int?
 
     public init(
         numLayers: Int? = nil,
@@ -32,7 +36,8 @@ public struct ArchitectureHints: Codable, Sendable, Hashable {
         intermediateSize: Int? = nil,
         slidingWindow: Int? = nil,
         visionEncoderParams: Int64? = nil,
-        kvCacheDTypeBytes: Int = 2
+        kvCacheDTypeBytes: Int = 2,
+        diffusionResolution: Int? = nil
     ) {
         self.numLayers = numLayers
         self.hiddenSize = hiddenSize
@@ -44,6 +49,7 @@ public struct ArchitectureHints: Codable, Sendable, Hashable {
         self.slidingWindow = slidingWindow
         self.visionEncoderParams = visionEncoderParams
         self.kvCacheDTypeBytes = kvCacheDTypeBytes
+        self.diffusionResolution = diffusionResolution
     }
 
     /// Effective KV heads: numKVHeads ?? numAttentionHeads.
