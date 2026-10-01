@@ -1,7 +1,9 @@
 # Roadmap
 
-Twelve-week build-out, completed 2026-10-02, plus the final hardening pass.
-Per-week detail and rationale live in DECISIONS.md; this file tracks status.
+Twelve-week build-out (weeks 1–12, with a mid-plan performance pass
+labelled 6b and week 12 split into 12a/12b hardening), completed
+2026-10-02, followed by a final hardening pass. Per-week detail and
+rationale live in DECISIONS.md; this file tracks status.
 
 | Week | Scope | Status |
 |------|-------|--------|
@@ -15,11 +17,11 @@ Per-week detail and rationale live in DECISIONS.md; this file tracks status.
 | 7 | Concurrency hardening (`LockedState` for iOS 17), event stream contract, single terminal event | Done |
 | 8 | VLM runtime over MLXVLM, pre-inference image downsampling | Done |
 | 9 | Diffusion: Core ML (apple/ml-stable-diffusion) SD 1.x/2.x/XL variant selection and install | Done |
-| 10 | Decision runtime: token log-prob scoring with validated generation fallback | Done |
+| 10 | Decision runtime: token log-prob scoring (llama.cpp backend) with validated generation fallback | Done |
 | 11 | Video understanding via adaptive frame sampling over a VLM, map-reduce aggregation | Done |
 | 12a | Hardening: vendored ml-stable-diffusion (SD3/T5 dropped), dependency-graph cleanup | Done |
 | 12b | Failure-path and live end-to-end test suites, download-manager bug fixes | Done |
-| 13 | Final pass: thermal pacing in decode loops, security audit + SECURITY.md, release-build verification, docs | Done (this pass) |
+| Final | Thermal pacing in decode loops, security audit + SECURITY.md, release-build verification, docs | Done |
 
 ## Next steps
 
@@ -27,18 +29,14 @@ Per-week detail and rationale live in DECISIONS.md; this file tracks status.
    iPhone): run the Xcode scheme, exercise each playground, record real
    iPhone performance numbers into PERFORMANCE.md. MLX, MLXVLM, and
    Core ML paths are compiled out on Linux and have never run here.
-2. **Token-scoring backend for llama.cpp** — `TokenScoringBackend`
-   currently has no llama implementation; decision questions on GGUF
-   models use the validated-generation fallback until llama logits are
-   bridged (`LlamaBridge`).
-3. **GGUF architecture hints in the analyzer** —
-   `ArchitectureHints(ggufMetadata:)` exists but is not yet called from
-   the analyzer/registry path (needs a Range-fetch of the GGUF header).
-4. **Benchmark → compatibility wiring** — `CompatibilityProvider` reads
-   the persisted benchmark snapshot; verify the Home benchmark writes it
-   on device.
-5. **Multi-turn VLM chat** — VLM requests are currently single-turn
-   (prior assistant turns are not replayed).
-6. Audio, speech, embedding, and reranker modalities are declared in the
-   type system but have no runtimes; add only behind honest availability
-   reporting.
+2. **Multi-turn VLM chat** — VLM requests are currently single-turn
+   (prior assistant turns are not replayed into the prompt;
+   `VLMRuntime.swift`).
+3. **Token scoring for MLX models** — `LlamaTokenScoringBackend` covers
+   the GGUF runtime (`LlamaScoring.swift`, wired via
+   `GGUFRuntime.makeScoringBackend()` in `DecisionRuntime`); MLX-backed
+   decision questions still use the validated-generation fallback because
+   MLXLMCommon's generation API does not expose per-token logits.
+4. **Audio, speech, embedding, reranker runtimes** — the modalities are
+   declared in the type system (`ModelModality`) but no runtime
+   implements them; add only behind honest availability reporting.

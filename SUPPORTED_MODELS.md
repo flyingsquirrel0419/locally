@@ -83,8 +83,11 @@ budget today.
 
 Structured question answering (choice/boolean/probability/score/ranking)
 over the active text backend (see `Sources/LocallyRuntime/Decision`).
-Token log-probability scoring is used when a `TokenScoringBackend` exists
-for the runtime; otherwise a validated single-generation fallback.
+GGUF models are scored by token log-probabilities via
+`LlamaTokenScoringBackend` (`LlamaScoring.swift`, wired through
+`GGUFRuntime.makeScoringBackend()`); backends without a scoring
+implementation (MLX today — MLXLMCommon does not expose per-token logits)
+use a validated single-generation fallback.
 
 ## Explicitly unsupported
 
