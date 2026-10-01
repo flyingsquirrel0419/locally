@@ -92,3 +92,59 @@ LocallyError messages never carry it.
 Configs with `auto_map` are treated as data: the descriptor records
 `requiresRemoteCode=true` in metadata and reports no supported runtimes.
 Nothing from a repository is ever executed.
+
+## Week 3
+
+## 2026-10-01 — Storage preflight overhead model is 1.0x + headroom
+
+Completed files are installed by rename within the same volume, so no
+temporary copy of the payload exists at install time. The preflight requires
+`remaining + max(512 MB, 5% of file size)` free; the headroom covers resume
+data, jobs.json churn, and iOS snapshot overhead. Free space is probed via
+`volumeAvailableCapacityForImportantUsage` on Apple platforms; on Linux
+corelibs lacks the key so the default provider returns `.max` (treated as
+"unknown — proceed"), and the manager treats `.max` as a skip. The check
+re-runs before every file, not once per job, because other apps can consume
+space mid-job.
+
+## 2026-10-01 — Resume data lives in files, URLs live in memory
+
+URLSession resume blobs are opaque and can be large; they are written to
+`Downloads/resume/<jobID>/<index>.resume` and only the filename is persisted
+in jobs.json. Remote URLs are *not* persisted at all: the manager keeps them
+in an in-memory registry keyed by job id, and after relaunch the app must
+call `registerSources(_:for:)` before resuming. This keeps bearer tokens and
+signed URLs out of the on-disk store by construction (the auth header itself
+is injected at request time via `authHeaderProvider`, never stored).
+
+## 2026-10-01 — SHA-256 without swift-crypto
+
+CryptoKit under `canImport(CryptoKit)`; a ~60-line pure-Swift streaming
+SHA-256 (FIPS 180-4) covers Linux, tested against the empty string, "abc",
+a multi-block padding-boundary vector, and a 1 MB pattern whose reference
+digest came from `sha256sum`. swift-crypto is deliberately not a dependency
+so the package has zero external dependencies.
+
+## 2026-10-01 — Transport protocol isolates URLSession quirks
+
+`DownloadTransport` (start/pause/cancel + AsyncStream events) has three
+implementations: `URLSessionBackgroundTransport` (iOS background session,
+identifier `me.teamwicked.locally.downloads`, relaunch reattach via
+`taskDescription`), `FoundationURLSessionTransport` (delegate-based
+downloadTask; works with swift-corelibs-foundation which lacks
+`URLSession.bytes(for:)`), and a mock for tests. The Foundation transport
+has no resumeData concept — `pause` cancels and resume falls back to an
+HTTP `Range` header from the part-file size, which the mock emulates.
+All requests send `Accept-Encoding: identity` because gzip transcoding
+breaks byte-exact size and sha256 verification (observed live: HEAD on HF
+resolve endpoints omits Content-Length when compressed).
+
+## 2026-10-01 — Queue pump is serialized; policy pauses are managed states
+
+`schedule()` coalesces concurrent pumps through a `pumping`/`pumpAgain`
+flag pair so retry, resume, and completion events cannot double-start a
+file; `startFile` re-reads the store and bails if the file left `.queued`.
+Automatic retry is capped at 3 with injected-clock exponential backoff
+(1/2/4 s), and 401/403 (`HTTPStatusError`) are never retried. The
+"only while charging" policy pauses via the same code path as user pause,
+so resume data is captured identically.

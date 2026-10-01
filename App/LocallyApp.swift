@@ -2,9 +2,18 @@ import SwiftUI
 
 @main
 struct LocallyApp: App {
+    @UIApplicationDelegateAdaptor(LocallyAppDelegate.self) private var appDelegate
+
+    init() {
+        // Start the shared download runtime at launch; the HF token provider
+        // is wired by the app layer so tokens never touch storage.
+        DownloadRuntime.shared.start(authHeaderProvider: { _ in nil })
+    }
+
     var body: some Scene {
         WindowGroup {
             RootTabView()
+                .environment(DownloadRuntime.shared.holder)
         }
     }
 }

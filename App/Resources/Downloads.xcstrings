@@ -1,0 +1,102 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Downloads" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드 없음" } }
+      }
+    },
+    "empty.description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Models you download from the catalog will appear here." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "카탈로그에서 다운로드한 모델이 여기에 표시됩니다." } }
+      }
+    },
+    "state.queued" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Queued" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "대기 중" } }
+      }
+    },
+    "state.downloading" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Downloading" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드 중" } }
+      }
+    },
+    "state.paused" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Paused" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "일시 정지됨" } }
+      }
+    },
+    "state.completed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Completed" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "완료됨" } }
+      }
+    },
+    "state.failed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Failed" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "실패" } }
+      }
+    },
+    "state.cancelled" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancelled" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "취소됨" } }
+      }
+    },
+    "action.pause" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pause" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "일시 정지" } }
+      }
+    },
+    "action.resume" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Resume" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "재개" } }
+      }
+    },
+    "action.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "취소" } }
+      }
+    },
+    "action.retry" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Retry" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "재시도" } }
+      }
+    },
+    "settings.menu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Download Settings" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드 설정" } }
+      }
+    },
+    "settings.wifiOnly" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Wi-Fi Only" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Wi-Fi만 사용" } }
+      }
+    },
+    "settings.chargingOnly" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Only While Charging" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "충전 중에만" } }
+      }
+    },
+    "settings.concurrency" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Concurrent Downloads" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "동시 다운로드" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
