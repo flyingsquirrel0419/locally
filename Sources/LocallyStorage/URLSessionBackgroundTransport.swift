@@ -153,6 +153,15 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
         }
     }
 
+    /// Never forward Authorization across hosts on redirect.
+    public func urlSession(_ session: URLSession, task: URLSessionTask,
+                           willPerformHTTPRedirection response: HTTPURLResponse,
+                           newRequest request: URLRequest,
+                           completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(RedirectPolicy.sanitize(request: request,
+                                                  original: task.originalRequest ?? request))
+    }
+
     public func urlSession(_ session: URLSession, task: URLSessionTask,
                            didCompleteWithError error: Error?) {
         guard let error, let download = task as? URLSessionDownloadTask,

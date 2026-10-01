@@ -27,12 +27,32 @@ public protocol HTTPTransport: Sendable {
     func get(url: URL, headers: [String: String]) async throws -> HTTPResponse
 }
 
-/// URLSession-based transport used by the app.
+/// Strips Authorization when a redirect crosses to a host the token must
+/// not reach, and refuses non-HTTPS redirects outright.
+final class RedirectSanitizingDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(RedirectPolicy.sanitize(request: request,
+                                                  original: task.originalRequest ?? request))
+    }
+}
+
+/// URLSession-based transport used by the app. Redirects pass through
+/// `RedirectPolicy`, so the HF token never crosses to a foreign host even
+/// when /resolve/ bounces to a CDN.
 public struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    public init(session: URLSession? = nil) {
+        if let session {
+            self.session = session
+        } else {
+            self.session = URLSession(configuration: .default,
+                                      delegate: RedirectSanitizingDelegate(),
+                                      delegateQueue: nil)
+        }
     }
 
     public func get(url: URL, headers: [String: String]) async throws -> HTTPResponse {

@@ -24,7 +24,11 @@ final class DownloadReducerTests: XCTestCase {
         s = DownloadReducer.reduce(s, .start)
         s = DownloadReducer.reduce(s, .pause(resumeDataAvailable: true))
         XCTAssertEqual(s, .paused(resumeDataAvailable: true))
+        // Resume re-queues; the scheduling pump owns prepare/start.
         s = DownloadReducer.reduce(s, .resume)
+        XCTAssertEqual(s, .queued)
+        s = DownloadReducer.reduce(s, .prepare)
+        s = DownloadReducer.reduce(s, .start)
         XCTAssertEqual(s, .downloading(progress: 0))
     }
 
