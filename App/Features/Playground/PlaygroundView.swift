@@ -1,64 +1,177 @@
 import SwiftUI
 import LocallyCore
 import LocallyRuntime
+import LocallyStorage
 
-/// Modality-aware playground container. Text models get the chat surface;
-/// other modalities get an honest "not yet supported" state rather than a
-/// fake preview.
+/// Modality-aware playground container. The picker lists installed text
+/// models from the ModelRegistry; the router picks the runtime, with a
+/// per-model override taken from the model's settings. Non-text modalities
+/// get an honest "not yet supported" state rather than a fake preview.
 struct PlaygroundView: View {
-    /// The model under test. Until model selection ships (Week 7+), the
-    /// playground opens empty; pass a descriptor to open a session.
-    let model: ModelDescriptor?
-    let router: RuntimeRouter
-    let device: DeviceCapabilities
+    @Environment(ModelLibraryHolder.self) private var library
+    @Environment(RuntimeRegistryHolder.self) private var runtimes
+    @Environment(AppNavigation.self) private var navigation
 
-    init(model: ModelDescriptor? = nil,
-         router: RuntimeRouter = RuntimeRouter(runtimes: [GGUFRuntime()]),
-         device: DeviceCapabilities = DeviceCapabilities(
-            physicalMemory: ProcessInfo.processInfo.physicalMemory,
-            metalAvailable: true,
-            neuralEngineAvailable: true)) {
-        self.model = model
-        self.router = router
-        self.device = device
-    }
+    @State private var selectedID: String?
+    @State private var selectionTask: Task<Void, Never>?
+
+    init() {}
 
     var body: some View {
         NavigationStack {
             content
                 .navigationTitle(String(localized: "tab.playground"))
+                .toolbar {
+                    if !installedTextModels.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            modelPicker
+                        }
+                    }
+                }
+        }
+        .onAppear {
+            runtimes.registry?.refreshDevice()
+            consumeNavigationRequest()
+            reconcileSelection()
+        }
+        .onChange(of: navigation.playgroundModelID) { _, _ in
+            consumeNavigationRequest()
+        }
+        .onDisappear {
+            selectionTask?.cancel()
         }
     }
 
+    // MARK: - Model list
+
+    /// Installed text models; MLX and GGUF formats both welcome — routing
+    /// decides which runtime serves the selected model.
+    private var installedTextModels: [InstalledModel] {
+        guard let registry = library.registry else { return [] }
+        return registry.list().filter { model in
+            !model.hasMissingFiles
+                && (model.descriptor.modality == .text || model.descriptor.modality == .unknown)
+        }
+    }
+
+    private var selectedModel: InstalledModel? {
+        guard let selectedID else { return nil }
+        return installedTextModels.first { $0.id == selectedID }
+    }
+
+    private var modelPicker: some View {
+        Picker(String(localized: "playground.picker.model", table: "Playground"),
+               selection: Binding<String?>(
+                get: { selectedID },
+                set: { select(id: $0) })) {
+            Text(String(localized: "playground.picker.none", table: "Playground"))
+                .tag(String?.none)
+            ForEach(installedTextModels) { model in
+                Text(model.descriptor.name).tag(String?.some(model.id))
+            }
+        }
+    }
+
+    // MARK: - Content
+
     @ViewBuilder
     private var content: some View {
-        if let model {
-            switch model.modality {
-            case .text:
-                switch router.decide(for: model, on: device).rating {
-                case .unsupported(let reason):
-                    UnsupportedModelView(reason: reason)
-                case .risky(let reason):
-                    RiskyModelView(model: model, router: router, device: device, warning: reason)
-                case .supported:
-                    ChatView(model: model, router: router, device: device)
-                }
-            default:
-                ContentUnavailableView(
-                    String(localized: "playground.unsupportedModality.title", table: "Playground"),
-                    systemImage: "bubble.left.and.text.bubble.right",
-                    description: Text(String(
-                        localized: "playground.unsupportedModality.description",
-                        table: "Playground"))
-                )
-            }
+        if let model = selectedModel,
+           let registry = runtimes.registry {
+            session(for: model, registry: registry)
         } else {
             ContentUnavailableView(
                 String(localized: "playground.empty.title", table: "Playground"),
                 systemImage: "bubble.left.and.text.bubble.right",
-                description: Text(String(localized: "playground.empty.description", table: "Playground"))
+                description: Text(String(localized: "playground.empty.description",
+                                         table: "Playground"))
             )
         }
+    }
+
+    /// One session view per model+runtime decision: id() forces a fresh
+    /// ChatViewModel when either changes, so stale sessions never leak.
+    @ViewBuilder
+    private func session(for model: InstalledModel,
+                         registry: RuntimeRegistry) -> some View {
+        let prepared = preparedDescriptor(for: model, registry: registry)
+        let decision = registry.router.decide(for: prepared, on: registry.device)
+        switch model.descriptor.modality {
+        case .text, .unknown:
+            switch decision.rating {
+            case .unsupported(let reason):
+                UnsupportedModelView(reason: reason)
+            case .risky(let reason):
+                RiskyModelView(model: prepared, registry: registry, warning: reason)
+                    .id(model.id)
+            case .supported:
+                ChatView(model: prepared, registry: registry)
+                    .id(model.id)
+            }
+        default:
+            ContentUnavailableView(
+                String(localized: "playground.unsupportedModality.title", table: "Playground"),
+                systemImage: "bubble.left.and.text.bubble.right",
+                description: Text(String(
+                    localized: "playground.unsupportedModality.description",
+                    table: "Playground"))
+            )
+        }
+    }
+
+    /// Descriptor handed to the runtime: install location injected (directory
+    /// for MLX, file path for GGUF), runtime override from the model's
+    /// settings applied so the router honors it.
+    private func preparedDescriptor(for model: InstalledModel,
+                                    registry: RuntimeRegistry) -> ModelDescriptor {
+        var descriptor = model.descriptor
+        let layout = FilesystemLayout.applicationSupport()
+        let directory = layout.modelDirectory(repoID: model.repoID, revision: model.revision)
+        descriptor.metadata["localDirectory"] = directory.path
+        if descriptor.metadata["localPath"] == nil,
+           let first = descriptor.requiredFiles.first,
+           let fileURL = try? layout.installedFileURL(
+            repoID: model.repoID, revision: model.revision, relativePath: first.path) {
+            descriptor.metadata["localPath"] = fileURL.path
+        }
+        if let override = model.runtimeOverride,
+           descriptor.supportedRuntimes.contains(override) {
+            descriptor.supportedRuntimes.removeAll { $0 == override }
+            descriptor.supportedRuntimes.insert(override, at: 0)
+        }
+        if let context = model.contextOverride {
+            descriptor.contextLength = context
+        }
+        return descriptor
+    }
+
+    // MARK: - Selection
+
+    private func select(id: String?) {
+        selectedID = id
+        selectionTask?.cancel()
+        guard let id, let registry = runtimes.registry else { return }
+        guard let model = installedTextModels.first(where: { $0.id == id }) else { return }
+        let prepared = preparedDescriptor(for: model, registry: registry)
+        // One large model at a time: selecting a new model releases the old.
+        selectionTask = Task {
+            try? await library.registry?.markUsed(id: id)
+            try? await registry.load(model: prepared)
+        }
+    }
+
+    /// "Run in Playground" from Model Detail lands here.
+    private func consumeNavigationRequest() {
+        guard let id = navigation.playgroundModelID else { return }
+        navigation.playgroundModelID = nil
+        select(id: id)
+    }
+
+    /// Drop the selection if the model disappeared (deleted elsewhere).
+    private func reconcileSelection() {
+        guard let selectedID,
+              !installedTextModels.contains(where: { $0.id == selectedID }) else { return }
+        self.selectedID = nil
     }
 }
 
@@ -80,14 +193,13 @@ private struct UnsupportedModelView: View {
 /// user try anyway.
 private struct RiskyModelView: View {
     let model: ModelDescriptor
-    let router: RuntimeRouter
-    let device: DeviceCapabilities
+    let registry: RuntimeRegistry
     let warning: String
     @State private var proceed = false
 
     var body: some View {
         if proceed {
-            ChatView(model: model, router: router, device: device)
+            ChatView(model: model, registry: registry)
         } else {
             ContentUnavailableView {
                 Label(String(localized: "playground.risky.title", table: "Playground"),

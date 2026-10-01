@@ -7,8 +7,9 @@ struct ChatView: View {
     @State private var viewModel: ChatViewModel
     @State private var showControls = false
 
-    init(model: ModelDescriptor, router: RuntimeRouter, device: DeviceCapabilities) {
-        _viewModel = State(initialValue: ChatViewModel(model: model, router: router, device: device))
+    init(model: ModelDescriptor, registry: RuntimeRegistry) {
+        _viewModel = State(initialValue: ChatViewModel(
+            model: model, router: registry.router, device: registry.device))
     }
 
     var body: some View {

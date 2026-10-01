@@ -18,6 +18,8 @@ struct LocallyApp: App {
             #endif
         })
         ModelLibraryRuntime.shared.start()
+        // Runtime registry + cross-tab navigation for the playground.
+        AppRuntime.shared.start()
     }
 
     var body: some Scene {
@@ -25,6 +27,8 @@ struct LocallyApp: App {
             RootTabView()
                 .environment(DownloadRuntime.shared.holder)
                 .environment(ModelLibraryRuntime.shared.holder)
+                .environment(AppRuntime.shared.runtimeHolder)
+                .environment(AppRuntime.shared.navigation)
         }
     }
 }

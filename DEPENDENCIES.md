@@ -36,3 +36,52 @@ honestly reports llama.cpp as not linked.
 `bartowski/SmolLM2-135M-Instruct-GGUF` (Q4_K_M) from Hugging Face into
 `.deps/models` for the `LOCALLY_LIVE_LLAMA=1` live inference test. Apache 2.0
 weights; never committed, never used in CI.
+
+## MLX stack (Apple only, app target)
+
+### mlx-swift-lm
+
+- Version: 3.31.4 (exact; tag `3.31.4`)
+- License: MIT
+- Upstream: https://github.com/ml-explore/mlx-swift-lm (moved out of
+  mlx-swift-examples in 2025)
+- Products used: `MLXLLM`, `MLXLMCommon`
+- Notes: pinned to 3.31.4 instead of the newer 3.32.3 because 3.32.x
+  requires swift-tools 6.2 / Xcode 26, which the macos-15 CI image does
+  not provide. 3.x decouples tokenizers behind the `TokenizerLoader`
+  protocol, so we load the bundled swift-transformers tokenizer from the
+  installed model directory with no network path (no `Downloader` is
+  used; the HF hub is never touched at inference time).
+
+### mlx-swift
+
+- Version: 0.31.4 (exact; tag `0.31.4`, pulled transitively by
+  mlx-swift-lm as `.upToNextMinor(from: "0.31.4")`; pinned explicitly so
+  the app can link `MLX`/`MLXRandom` directly)
+- License: MIT
+- Upstream: https://github.com/ml-explore/mlx-swift
+- Products used: `MLX`, `MLXRandom`
+- Notes: memory controls are `MLX.Memory.memoryLimit` / `cacheLimit`
+  (get/set) and `MLX.Memory.clearCache()`; the older
+  `MLX.GPU.set(cacheLimit:)` forwards to these and is deprecated in
+  0.31.4.
+
+### swift-transformers
+
+- Version: 1.3.4 (exact; tag `1.3.4`)
+- License: Apache-2.0
+- Upstream: https://github.com/huggingface/swift-transformers
+- Products used: `Tokenizers`
+- Notes: `AutoTokenizer.from(modelFolder:)` loads tokenizer.json +
+  tokenizer_config.json from a local directory; chat templating goes
+  through swift-jinja. Deployment target iOS 16, satisfied by our iOS 17
+  floor.
+
+### Binary-size notes
+
+MLX ships Metal kernels compiled at build time and links Accelerate /
+Metal statically into the app; expect roughly 15-30 MB added to the app
+binary for the MLX stack (varies by architecture slice and dead-code
+stripping). swift-transformers + swift-jinja are pure Swift and add
+under 2 MB. Weights are never bundled — models are downloaded at
+runtime into Application Support.
