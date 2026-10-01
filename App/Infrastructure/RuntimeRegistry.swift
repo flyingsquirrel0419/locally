@@ -101,6 +101,20 @@ final class RuntimeRegistry {
             activeRuntime = nil
             loadedRepoID = nil
         }
+        // Load-time memory refusal: when the analyzer produced a weight
+        // estimate, refuse loads that exceed the device's safe AI budget
+        // rather than letting the load die deep inside the runtime.
+        let budget = MemoryBudget.safeAIBudget(
+            physicalMemory: device.physicalMemory,
+            availableEstimate: device.physicalMemory)
+        if let estimate = model.estimatedWeightMemory, estimate > 0,
+           estimate > Int64(budget) {
+            let needed = Self.formatGB(estimate)
+            let available = Self.formatGB(Int64(budget))
+            throw LocallyError.insufficientMemory(
+                userMessage: "Not enough memory: needs ~\(needed) GB, your device can safely provide ~\(available) GB.",
+                technicalDetail: "estimatedWeightMemory=\(estimate) budget=\(budget)")
+        }
         try await runtime.load(model)
         activeRuntime = runtime
         loadedRepoID = model.repoID
@@ -144,6 +158,12 @@ final class RuntimeRegistry {
             return runtimes.contains { $0.kind == kind } ? .available
                 : .unavailable(reason: "runtime not registered")
         }
+    }
+
+    /// Whole-or-tenth GB formatting for the memory refusal message.
+    static func formatGB(_ bytes: Int64) -> String {
+        let gb = Double(bytes) / 1_000_000_000
+        return gb >= 10 ? String(format: "%.0f", gb) : String(format: "%.1f", gb)
     }
 
     enum RuntimeAvailability: Sendable, Hashable {

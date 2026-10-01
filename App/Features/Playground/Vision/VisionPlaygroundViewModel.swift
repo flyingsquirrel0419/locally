@@ -76,7 +76,7 @@ final class VisionPlaygroundViewModel {
         } catch let error as LocallyError {
             lastError = error.userMessage
         } catch {
-            lastError = error.localizedDescription
+            lastError = ErrorPresentation.userMessage(for: error)
         }
     }
 
@@ -153,7 +153,7 @@ final class VisionPlaygroundViewModel {
                     }
                 }
             } catch {
-                lastError = error.localizedDescription
+                lastError = ErrorPresentation.userMessage(for: error)
             }
         }
     }

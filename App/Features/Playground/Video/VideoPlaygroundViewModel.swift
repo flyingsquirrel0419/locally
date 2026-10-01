@@ -77,7 +77,7 @@ final class VideoPlaygroundViewModel {
         } catch let error as LocallyError {
             lastError = error.userMessage
         } catch {
-            lastError = error.localizedDescription
+            lastError = ErrorPresentation.userMessage(for: error)
         }
     }
 
@@ -98,7 +98,7 @@ final class VideoPlaygroundViewModel {
             lastError = nil
             planReason = nil
         } catch {
-            lastError = error.localizedDescription
+            lastError = ErrorPresentation.userMessage(for: error)
         }
     }
 
@@ -154,7 +154,7 @@ final class VideoPlaygroundViewModel {
                     }
                 }
             } catch {
-                lastError = error.localizedDescription
+                lastError = ErrorPresentation.userMessage(for: error)
             }
         }
     }

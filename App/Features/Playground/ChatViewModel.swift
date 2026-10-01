@@ -75,7 +75,7 @@ final class ChatViewModel {
         } catch let error as LocallyError {
             lastError = error.userMessage
         } catch {
-            lastError = error.localizedDescription
+            lastError = ErrorPresentation.userMessage(for: error)
         }
     }
 
@@ -128,7 +128,7 @@ final class ChatViewModel {
                 }
             } catch {
                 if !Task.isCancelled {
-                    self.failStreaming(with: error.localizedDescription)
+                    self.failStreaming(with: ErrorPresentation.userMessage(for: error))
                 }
             }
             self.finishGeneration()

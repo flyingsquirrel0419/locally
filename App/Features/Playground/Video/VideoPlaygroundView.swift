@@ -197,6 +197,7 @@ struct VideoPlaygroundView: View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(DS.Color.warning)
+                .accessibilityHidden(true)
             Text(message)
                 .font(DS.Typography.caption)
                 .foregroundStyle(DS.Color.label)

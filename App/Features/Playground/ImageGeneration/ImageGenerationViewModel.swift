@@ -46,7 +46,7 @@ final class ImageGenerationViewModel {
         } catch let error as LocallyError {
             loadError = error.userMessage
         } catch {
-            loadError = error.localizedDescription
+            loadError = ErrorPresentation.userMessage(for: error)
         }
     }
 
@@ -102,7 +102,7 @@ final class ImageGenerationViewModel {
             } catch let error as LocallyError {
                 await MainActor.run { self.lastError = error.userMessage }
             } catch {
-                await MainActor.run { self.lastError = error.localizedDescription }
+                await MainActor.run { self.lastError = ErrorPresentation.userMessage(for: error) }
             }
             await MainActor.run {
                 self.isGenerating = false
