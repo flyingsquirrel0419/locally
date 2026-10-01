@@ -20,7 +20,9 @@ final class Inflater: @unchecked Sendable {
     private var finished = false
 
     #if canImport(Compression)
-    private var stream: compression_stream?
+    // compression_stream has no zero-arg Swift init on Apple platforms;
+    // hold an allocated pointer for the object's lifetime.
+    private var stream: UnsafeMutablePointer<compression_stream>?
     #elseif canImport(CZlib)
     private var zstream = z_stream()
     private var zstreamStarted = false
@@ -28,9 +30,10 @@ final class Inflater: @unchecked Sendable {
 
     init() throws {
         #if canImport(Compression)
-        var s = compression_stream()
-        guard compression_stream_init(&s, COMPRESSION_STREAM_DECODE,
+        let s = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
+        guard compression_stream_init(s, COMPRESSION_STREAM_DECODE,
                                       COMPRESSION_ZLIB) == COMPRESSION_STATUS_OK else {
+            s.deallocate()
             throw InflateError.streamSetupFailed
         }
         self.stream = s
@@ -46,7 +49,10 @@ final class Inflater: @unchecked Sendable {
 
     deinit {
         #if canImport(Compression)
-        if var s = stream { compression_stream_destroy(&s) }
+        if let s = stream {
+            compression_stream_destroy(s)
+            s.deallocate()
+        }
         #elseif canImport(CZlib)
         if zstreamStarted { inflateEnd(&zstream) }
         #endif
@@ -67,38 +73,36 @@ final class Inflater: @unchecked Sendable {
 
     #if canImport(Compression)
     private func inflateApple(_ chunk: Data, isLast: Bool) throws -> Data {
-        guard var s = stream else { throw InflateError.streamSetupFailed }
-        defer { stream = s }
+        guard let s = stream else { throw InflateError.streamSetupFailed }
         var output = Data()
         let flags = isLast ? Int32(COMPRESSION_STREAM_FINALIZE.rawValue) : 0
-        let status: compression_status = chunk.withUnsafeBytes { src in
+        var status: compression_status = chunk.withUnsafeBytes { src in
             scratch.withUnsafeMutableBytes { dst in
-                s.src_ptr = src.baseAddress!.assumingMemoryBound(to: UInt8.self)
-                s.src_size = chunk.count
-                s.dst_ptr = dst.baseAddress!.assumingMemoryBound(to: UInt8.self)
-                s.dst_size = dst.count
-                return compression_stream_process(&s, flags)
+                s.pointee.src_ptr = src.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                s.pointee.src_size = chunk.count
+                s.pointee.dst_ptr = dst.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                s.pointee.dst_size = dst.count
+                return compression_stream_process(s, flags)
             }
         }
-        let produced = scratch.count - s.dst_size
+        let produced = scratch.count - s.pointee.dst_size
         output.append(contentsOf: scratch[0..<produced])
         // compression_stream_process may leave input unconsumed when the
         // output buffer fills; loop until all input is drained.
-        var status = status
-        while status == COMPRESSION_STATUS_OK && s.src_size > 0 {
+        while status == COMPRESSION_STATUS_OK && s.pointee.src_size > 0 {
             let more: compression_status = scratch.withUnsafeMutableBytes { dst in
-                s.dst_ptr = dst.baseAddress!.assumingMemoryBound(to: UInt8.self)
-                s.dst_size = dst.count
-                return compression_stream_process(&s, flags)
+                s.pointee.dst_ptr = dst.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                s.pointee.dst_size = dst.count
+                return compression_stream_process(s, flags)
             }
-            let n = scratch.count - s.dst_size
+            let n = scratch.count - s.pointee.dst_size
             output.append(contentsOf: scratch[0..<n])
             status = more
         }
         switch status {
         case COMPRESSION_STATUS_OK, COMPRESSION_STATUS_END:
             if status == COMPRESSION_STATUS_END { finished = true }
-            if isLast && !finished && s.src_size == 0 {
+            if isLast && !finished && s.pointee.src_size == 0 {
                 // Truncated deflate stream: size check downstream catches it,
                 // but flag it here too for a clearer error.
                 finished = true
