@@ -57,3 +57,38 @@ reaches disk.
 stderr on Linux. It has no API that accepts tokens or user content, and
 the project rule is that model file bytes, HF tokens, and prompts are
 never passed to it.
+
+## Week 2
+
+### 2026-10-01 — Safetensors header counts need a packed-bits hint
+
+MLX 4-bit repos store quantized weights as packed `U32` tensors whose
+`shape` reflects packed columns ([rows, cols/8] for 4-bit), so a naive
+dtype×shape sum undercounts (77M reported for a 0.5B model). The analyzer
+passes the config-declared quantization bits into the header parser, which
+expands `.weight` entries of dtype U32/I32 by 32/bits. Headers are summed
+across all top-level safetensors shards (subdirectory shards like diffusion
+unet/vae are not summed into a single count — diffusion repos report no
+global parameter count from headers).
+
+### 2026-10-01 — GGUF default variant is Q4_K_M, else smallest ≥4-bit
+
+Q4_K_M is the de-facto best quality/size tradeoff in llama.cpp quant sets.
+When absent, the analyzer picks the smallest file whose parsed quant is
+≥4 bits (below that, quality degrades sharply), falling back to the first
+listed GGUF. All other quants are excluded from `requiredFiles`.
+
+### 2026-10-01 — HF access is HTTPS-only and token-optional
+
+HFClient refuses non-huggingface.co / non-hf.co hosts when the default API
+base is in use (tests may inject a different base via the mock transport,
+which bypasses URL validation). The Authorization header is attached only
+when a token exists — public repos work unauthenticated. The token lives in
+the Keychain (AfterFirstUnlockThisDeviceOnly); a regression test asserts
+LocallyError messages never carry it.
+
+### 2026-10-01 — trust_remote_code models analyze but never run
+
+Configs with `auto_map` are treated as data: the descriptor records
+`requiresRemoteCode=true` in metadata and reports no supported runtimes.
+Nothing from a repository is ever executed.
