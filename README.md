@@ -73,6 +73,35 @@ open Locally.xcodeproj
 Note: the simulator has no Metal device; MLX/VLM/diffusion runtimes report
 themselves unavailable there. Use a physical device for anything GPU.
 
+## Unsigned IPA (pre-release)
+
+Each release on GitHub carries an unsigned device build,
+`Locally-<tag>-unsigned.ipa`, built by CI from the tagged commit with
+`xcodebuild archive … CODE_SIGNING_ALLOWED=NO`. It is an iOS-device (arm64)
+build of the app with its embedded frameworks (llama.cpp, MLX/Metal
+libraries) in the standard `Payload/` IPA layout.
+
+It is **not signed**, and iOS will not install it as-is. To run it you must
+re-sign it with your own Apple ID and provisioning profile using a
+sideloading tool (for example AltStore or Sideloadly), or install it via
+TrollStore on devices where TrollStore is supported. Re-signing replaces
+the entitlements with whatever your signing certificate/profile permits:
+in particular, the `com.apple.developer.kernel.increased-memory-limit`
+entitlement only takes effect if the profile you re-sign with allows it;
+otherwise the app runs under the default memory limit.
+
+This is a **pre-release** artifact. It is built and bundle-verified in CI
+(arm64 main binary, bundle id, embedded frameworks, Metal shader libraries)
+but has **not yet been installed or run on a physical iPhone** — treat it
+as untested on hardware. There is no App Store or TestFlight distribution.
+
+Verify the download before installing:
+
+```sh
+shasum -a 256 Locally-<tag>-unsigned.ipa
+# compare against Locally-<tag>-unsigned.ipa.sha256 from the same release
+```
+
 ## Supported models
 
 See SUPPORTED_MODELS.md for the exact architecture lists per runtime and
