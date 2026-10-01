@@ -309,3 +309,51 @@ every byte offset and assert a thrown error, never a crash.
 unsupported reason; a risky rating shows the warning and requires an
 explicit "Try Anyway". The metrics footer displays only values measured by
 the runtime (load time, TTFT, tok/s, token count) — nil renders as "–".
+
+## Week 7
+
+### 2026-10-01 — LockedState replaces Synchronization.Mutex for iOS 17
+
+`Mutex` (Swift 6 Synchronization) requires iOS 18/macOS 15; the package
+deploys to iOS 17/macOS 14, so the iOS build failed at link time. A small
+`LockedState<Value>` (NSLock, `@unchecked Sendable`, `withLock`) in
+LocallyCore replaces every usage — registry state, the URLSession
+transport's task map, and test helpers. Same call shape, no behavior
+change, no availability constraint.
+
+### 2026-10-01 — Compatibility rating bands vs. safe budget
+
+The report's rating compares the memory HIGH estimate against the device's
+safe working-set budget (55% of physical RAM, clamped to available):
+excellent < 0.45, good < 0.70, usable < 0.95, risky < 1.15, unsupported ≥ 1.15
+(plus hard blockers: requiresRemoteCode, unknown modality, no runtime,
+insufficient free storage). We rate on the high estimate because a crash
+under load costs more than a false caution. Real consequences on the
+fixture matrix: an 8B 4-bit model (~6.0–6.5 GB total) is unsupported on
+an 8 GB iPhone (budget ~4.7 GB) but usable on 12 GB; 8B fp16 is
+unsupported everywhere below 32 GB; 0.5B 4-bit is excellent from 6 GB up.
+This matches field behavior of llama.cpp/MLX on A17-class hardware, where
+an 8B quant at 8K context survives only on 12 GB devices with headroom to
+spare.
+
+### 2026-10-01 — Speed estimates come from data, never from guesses
+
+Source order: (a) InferenceMetadata samples recorded by this device for
+this model → `.measured(min…max)`; (b) the device benchmark's measured
+memory GB/s ÷ weight bytes read per token, scaled by a 0.5–0.8 efficiency
+band → `.estimated`; (c) otherwise `.unknown`. The UI labels all three
+honestly. No model database, no marketing numbers, no fabricated tok/s.
+
+### 2026-10-01 — Memory estimate is a range with a breakdown, plus margin
+
+Weights prefer real download bytes over params × bits/8 (+3–10% quant
+group overhead). KV cache = 2 × layers × kvHeads × headDim × context ×
+dtypeBytes (2 B fp16 default), capped by the sliding window when the
+architecture declares one. Activations ≈ vocab logits + 64 hidden-sized
+scratch buffers. Per-runtime overhead constants are documented in
+MemoryEstimator (MLX 200–400 MB, llama.cpp 150–300 MB, CoreML 250–500 MB,
+diffusion 400–800 MB, video 0.5–1 GB). VLMs add the vision encoder tower
+(config-derived params × 2 B + image buffer); diffusion adds
+latent/VAE/UNet buffers at 1024²; video adds frames × frame buffers.
+A 10–15% safety margin sits on top. Unknown inputs widen the range and
+drop confidence to .low — never silently zero.

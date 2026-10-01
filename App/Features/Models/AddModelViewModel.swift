@@ -1,6 +1,7 @@
 import Foundation
 import LocallyCore
 import LocallyHF
+import LocallyCompatibility
 import LocallyStorage
 
 /// Models tab: analyzes a pasted HF link/repo into a ModelDescriptor, then
@@ -14,6 +15,11 @@ final class AddModelViewModel {
     var errorMessage: String?
     /// True once the install job was queued; the sheet switches to Downloads.
     var didQueueDownload = false
+    /// Compatibility report for the analyzed descriptor; nil until the
+    /// device profile has loaded. Set after analyze() completes.
+    var compatibility: CompatibilityReport?
+    /// User must confirm a risky download before we accept it.
+    var showRiskyConfirmation = false
 
     private let analyzer = RepositoryAnalyzer()
     private var client: HFClient {
@@ -35,18 +41,38 @@ final class AddModelViewModel {
         guard !trimmed.isEmpty, !isAnalyzing else { return }
         isAnalyzing = true
         result = nil
+        compatibility = nil
         errorMessage = nil
         didQueueDownload = false
         Task {
             do {
                 let reference = try HFRepoReference(parsing: trimmed)
-                result = try await analyzer.analyze(reference, client: client)
+                let descriptor = try await analyzer.analyze(reference, client: client)
+                result = descriptor
+                compatibility = CompatibilityProvider.shared.report(for: descriptor)
             } catch let error as LocallyError {
                 errorMessage = error.userMessage
             } catch {
                 errorMessage = String(localized: "hf.error.unknown", table: "HF")
             }
             isAnalyzing = false
+        }
+    }
+
+    /// Download gate: risky asks for confirmation first; unsupported is
+    /// refused outright with the reason already visible in the report.
+    func requestDownload(using installService: ModelInstallService?) {
+        guard let report = compatibility else {
+            download(using: installService)
+            return
+        }
+        switch report.rating {
+        case .unsupported:
+            return
+        case .risky:
+            showRiskyConfirmation = true
+        case .excellent, .good, .usable:
+            download(using: installService)
         }
     }
 

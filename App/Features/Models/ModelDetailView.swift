@@ -1,6 +1,7 @@
 import SwiftUI
 import LocallyCore
 import LocallyStorage
+import LocallyCompatibility
 
 /// Full detail page for one installed model: info, runtime/context
 /// overrides, benchmark history, run/delete actions.
@@ -53,6 +54,12 @@ struct ModelDetailView: View {
                     Link(String(localized: "models.detail.openRepo", table: "Models"),
                          destination: url)
                 }
+            }
+
+            if let report = CompatibilityProvider.shared.report(
+                for: model.descriptor, benchmarks: model.benchmarks
+            ) {
+                CompatibilitySection(report: report)
             }
 
             Section(String(localized: "models.detail.runtime", table: "Models")) {
@@ -124,6 +131,7 @@ struct ModelDetailView: View {
         } message: {
             Text(String(localized: "models.delete.confirm.message", table: "Models"))
         }
+        .task { CompatibilityProvider.shared.ensureLoaded() }
     }
 
     private func benchmarkRow(_ sample: InferenceMetadata) -> some View {

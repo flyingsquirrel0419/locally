@@ -2,7 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-import Synchronization
+import LocallyCore
 @testable import LocallyStorage
 
 /// Test transport: scriptable bytes, controllable timing, no network.
@@ -30,7 +30,7 @@ final class MockTransport: DownloadTransport, @unchecked Sendable {
         var pausedIDs: Set<TransferID> = []
     }
 
-    private let state = Mutex(State())
+    private let state = LockedState(State())
 
     let stream: AsyncStream<(TransferID, DownloadTransportEvent)>
     private let continuation: AsyncStream<(TransferID, DownloadTransportEvent)>.Continuation

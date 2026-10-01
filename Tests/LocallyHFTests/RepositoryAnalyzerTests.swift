@@ -50,6 +50,17 @@ final class RepositoryAnalyzerTests: XCTestCase {
         XCTAssertEqual(descriptor.totalDownloadSize,
                        descriptor.requiredFiles.reduce(0) { $0 + $1.size })
         XCTAssertEqual(descriptor.estimatedWeightMemory, descriptor.totalDownloadSize)
+
+        // Architecture hints read straight from config.json.
+        let hints = try XCTUnwrap(descriptor.architectureHints)
+        XCTAssertEqual(hints.numLayers, 24)
+        XCTAssertEqual(hints.hiddenSize, 896)
+        XCTAssertEqual(hints.numAttentionHeads, 14)
+        XCTAssertEqual(hints.numKVHeads, 2)
+        XCTAssertEqual(hints.vocabSize, 151936)
+        XCTAssertEqual(hints.intermediateSize, 4864)
+        XCTAssertEqual(hints.effectiveHeadDim, 64)
+        XCTAssertEqual(hints.kvCacheDTypeBytes, 2)
     }
 
     func testGGUFVariantSelection() throws {
@@ -69,6 +80,16 @@ final class RepositoryAnalyzerTests: XCTestCase {
         XCTAssertTrue(weightFiles[0].path.contains("q4_k_m"))
         XCTAssertEqual(descriptor.totalDownloadSize, 397_000_000)
         XCTAssertEqual(descriptor.supportedRuntimes, [.gguf])
+
+        // Non-runtime artifacts are excluded: llama.cpp importance-matrix
+        // calibration data (quant tooling, not inference), licenses, images,
+        // docs, VCS attributes.
+        let paths = descriptor.requiredFiles.map(\.path)
+        XCTAssertFalse(paths.contains { $0.hasSuffix(".imatrix") })
+        XCTAssertFalse(paths.contains("LICENSE"))
+        XCTAssertFalse(paths.contains("thumbnail.png"))
+        XCTAssertFalse(paths.contains("README.md"))
+        XCTAssertFalse(paths.contains(".gitattributes"))
 
         // Param count falls back to the "0.5B" name hint.
         XCTAssertEqual(descriptor.parameterCount, 500_000_000)
@@ -91,6 +112,15 @@ final class RepositoryAnalyzerTests: XCTestCase {
         XCTAssertTrue(paths.contains("model-00002-of-00002.safetensors"))
         XCTAssertTrue(paths.contains("model.safetensors.index.json"))
         XCTAssertFalse(paths.contains("demo.jpg"))
+
+        // VLM hints: text tower fields plus a vision encoder estimate from
+        // vision_config (32 layers × (4h² + 2h·intermediate=4h)).
+        let hints = try XCTUnwrap(descriptor.architectureHints)
+        XCTAssertEqual(hints.numLayers, 28)
+        XCTAssertEqual(hints.hiddenSize, 1536)
+        XCTAssertEqual(hints.numKVHeads, 2)
+        let vh = Int64(1536)
+        XCTAssertEqual(hints.visionEncoderParams, 32 * (4 * vh * vh + 2 * vh * 4 * vh))
     }
 
     func testDiffusionModel() throws {

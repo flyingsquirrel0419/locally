@@ -31,6 +31,9 @@ public struct ModelDescriptor: Codable, Sendable, Hashable {
     public var estimatedRuntimeMemory: Int64?
     public var supportedRuntimes: [RuntimeKind]
     public var contextLength: Int?
+    /// Structural hints (layers, hidden size, KV heads, …) when the config
+    /// or GGUF metadata exposed them. Drives memory estimation.
+    public var architectureHints: ArchitectureHints?
     /// Free-form extra values from repo metadata (e.g. license, pipeline tag).
     public var metadata: [String: String]
 
@@ -48,6 +51,7 @@ public struct ModelDescriptor: Codable, Sendable, Hashable {
         estimatedRuntimeMemory: Int64? = nil,
         supportedRuntimes: [RuntimeKind] = [],
         contextLength: Int? = nil,
+        architectureHints: ArchitectureHints? = nil,
         metadata: [String: String] = [:]
     ) {
         self.repoID = repoID
@@ -63,6 +67,7 @@ public struct ModelDescriptor: Codable, Sendable, Hashable {
         self.estimatedRuntimeMemory = estimatedRuntimeMemory
         self.supportedRuntimes = supportedRuntimes
         self.contextLength = contextLength
+        self.architectureHints = architectureHints
         self.metadata = metadata
     }
 }

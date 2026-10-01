@@ -54,7 +54,28 @@ struct AddModelSheet: View {
                     Button(String(localized: "models.add.cancel", table: "HF")) { dismiss() }
                 }
             }
+            .task { CompatibilityProvider.shared.ensureLoaded() }
+            .confirmationDialog(
+                String(localized: "compatibility.risky.title", table: "Compatibility"),
+                isPresented: $viewModel.showRiskyConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "compatibility.risky.downloadAnyway", table: "Compatibility")) {
+                    viewModel.download(using: library.installService)
+                }
+                Button(String(localized: "models.add.cancel", table: "HF"), role: .cancel) {}
+            } message: {
+                Text(riskyExplanation)
+            }
         }
+    }
+
+    private var riskyExplanation: String {
+        let warnings = viewModel.compatibility?.warnings ?? []
+        if warnings.isEmpty {
+            return String(localized: "compatibility.risky.message", table: "Compatibility")
+        }
+        return warnings.joined(separator: "\n")
     }
 
     @ViewBuilder
@@ -112,6 +133,10 @@ struct AddModelSheet: View {
             }
         }
 
+        if let report = viewModel.compatibility {
+            CompatibilitySection(report: report)
+        }
+
         Section {
             ForEach(d.requiredFiles, id: \.path) { file in
                 HStack {
@@ -131,18 +156,27 @@ struct AddModelSheet: View {
         }
 
         Section {
+            let blocked = viewModel.compatibility?.rating == .unsupported
             Button {
-                viewModel.download(using: library.installService)
+                viewModel.requestDownload(using: library.installService)
             } label: {
                 if viewModel.didQueueDownload {
                     Label(String(localized: "models.add.downloading", table: "Models"),
                           systemImage: "checkmark.circle")
+                } else if blocked {
+                    Label(String(localized: "models.add.download.unsupported", table: "Compatibility"),
+                          systemImage: "xmark.octagon")
                 } else {
                     Text(String(localized: "models.add.download", table: "Models"))
                 }
             }
             .disabled(d.requiredFiles.isEmpty || viewModel.didQueueDownload
-                      || library.installService == nil)
+                      || library.installService == nil || blocked)
+            if blocked, let reason = viewModel.compatibility?.blockers.first {
+                Text(reason)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(DS.Color.bad)
+            }
         }
         .onChange(of: viewModel.didQueueDownload) { _, queued in
             if queued {

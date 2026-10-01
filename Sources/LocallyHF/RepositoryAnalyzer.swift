@@ -109,6 +109,7 @@ public struct RepositoryAnalyzer: Sendable {
             ?? estimateParametersFromName(reference.repoID.name)
         let context = config?.maxPositionEmbeddings
             ?? configs["generation_config.json"]?.maxPositionEmbeddings
+        let hints = architectureHints(from: config)
 
         let required = selectRequiredFiles(siblings: siblings, ggufVariant: ggufVariant,
                                            formats: formats)
@@ -146,6 +147,7 @@ public struct RepositoryAnalyzer: Sendable {
             supportedRuntimes: runtimes(for: formats, modality: modality,
                                         requiresRemoteCode: config?.requiresRemoteCode == true),
             contextLength: context,
+            architectureHints: hints,
             metadata: metadata
         )
     }
@@ -259,6 +261,55 @@ public struct RepositoryAnalyzer: Sendable {
         return nil
     }
 
+    // MARK: - Architecture hints
+
+    /// Reads transformer structure from config.json, looking into
+    /// `text_config`/`vision_config` for VLMs. Returns nil when the config
+    /// exposes nothing usable.
+    func architectureHints(from config: ModelConfig?) -> ArchitectureHints? {
+        guard let config else { return nil }
+        let root = config.raw
+        let text = root["text_config"]?.objectValue ?? root
+        let vision = root["vision_config"]?.objectValue
+
+        let hidden = text["hidden_size"]?.intValue
+        let layers = text["num_hidden_layers"]?.intValue
+        let heads = text["num_attention_heads"]?.intValue
+        let kvHeads = text["num_key_value_heads"]?.intValue
+        let headDim = text["head_dim"]?.intValue
+        let vocab = text["vocab_size"]?.intValue
+        let intermediate = text["intermediate_size"]?.intValue
+        let sliding = text["sliding_window"]?.intValue
+            ?? text["sliding_window_size"]?.intValue
+
+        // Vision encoder parameter estimate from its own config block:
+        // embedding + per-layer (attention + MLP), LLaVA/Qwen-VL style.
+        var visionParams: Int64?
+        if let vision,
+           let vh = vision["hidden_size"]?.intValue,
+           let vl = vision["num_hidden_layers"]?.intValue ?? vision["depth"]?.intValue {
+            let vHeads = vision["num_attention_heads"]?.intValue ?? max(1, vh / 64)
+            let vIntermediate = vision["intermediate_size"]?.intValue ?? 4 * vh
+            let h = Int64(vh), l = Int64(vl)
+            let perLayer = 4 * h * h + 2 * h * Int64(vIntermediate)
+            _ = vHeads // heads only affect shape split, not count
+            visionParams = l * perLayer
+        }
+
+        guard hidden != nil || layers != nil || visionParams != nil else { return nil }
+        return ArchitectureHints(
+            numLayers: layers,
+            hiddenSize: hidden,
+            numAttentionHeads: heads,
+            numKVHeads: kvHeads,
+            headDim: headDim,
+            vocabSize: vocab,
+            intermediateSize: intermediate,
+            slidingWindow: sliding,
+            visionEncoderParams: visionParams
+        )
+    }
+
     // MARK: - Parameter estimation
 
     /// LLaMA/Qwen-style estimate from config fields:
@@ -342,6 +393,7 @@ public struct RepositoryAnalyzer: Sendable {
             let lower = path.lowercased()
 
             if lower.hasPrefix(".git") { return nil }
+            if Self.isNonRuntimeFile(lower) { return nil }
             if lower.hasSuffix(".gguf") {
                 guard let variant = ggufVariant, path == variant.rfilename else { return nil }
             } else if lower.hasSuffix(".bin") {
@@ -356,12 +408,6 @@ public struct RepositoryAnalyzer: Sendable {
                 // Alternate framework formats are not required once a primary
                 // format (GGUF/MLX/safetensors) is chosen.
                 if hasGGUF || hasSafetensors || formats.contains(.coreml) == false { return nil }
-            } else if lower.hasSuffix(".png") || lower.hasSuffix(".jpg")
-                        || lower.hasSuffix(".jpeg") || lower.hasSuffix(".gif")
-                        || lower.hasSuffix(".webp") || lower.hasSuffix(".mp4")
-                        || lower == "readme.md" || lower.hasSuffix(".pdf")
-                        || lower.hasSuffix(".gitattributes") {
-                return nil
             }
 
             let size = sibling.lfs?.size ?? sibling.size ?? 0
@@ -377,6 +423,24 @@ public struct RepositoryAnalyzer: Sendable {
             $0.rfilename.lowercased().hasSuffix(".safetensors")
                 && !$0.rfilename.contains("/")
         }
+    }
+
+    /// Files that never belong in a runtime download: llama.cpp importance
+    /// matrices (calibration data for quantizing, not inference), docs,
+    /// images, VCS attributes, licenses, and other metadata-only artifacts.
+    /// `lower` is already lowercased.
+    static func isNonRuntimeFile(_ lower: String) -> Bool {
+        if lower.hasSuffix(".imatrix") { return true }
+        if lower.hasSuffix(".md") || lower.hasSuffix(".markdown")
+            || lower.hasSuffix(".pdf") { return true }
+        if lower.hasSuffix(".png") || lower.hasSuffix(".jpg") || lower.hasSuffix(".jpeg")
+            || lower.hasSuffix(".gif") || lower.hasSuffix(".webp") || lower.hasSuffix(".svg")
+            || lower.hasSuffix(".mp4") || lower.hasSuffix(".mov") { return true }
+        let base = (lower as NSString).lastPathComponent
+        if base == ".gitattributes" || base == ".gitignore" || base == "license"
+            || base == "license.txt" || base == "license.md" || base == "copying"
+            || base == "notice" || base == "authors" || base == "contributors" { return true }
+        return false
     }
 
     // MARK: - Memory & runtimes
