@@ -6,3 +6,5 @@ xcuserdata/
 .DS_Store
 Package.resolved
 .claude/
+.deps/
+Sources/CLlama/include
