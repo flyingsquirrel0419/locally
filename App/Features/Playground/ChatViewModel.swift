@@ -42,14 +42,19 @@ final class ChatViewModel {
     private let model: ModelDescriptor
     private let router: RuntimeRouter
     private let device: DeviceCapabilities
+    /// Called with each completed run's measured metadata so the library can
+    /// record it (drives the "Measured" speed label in compatibility).
+    private let onInferenceCompleted: (@Sendable (InferenceMetadata) -> Void)?
     private var runtime: (any ModelCompatibleRuntime)?
     private var generationTask: Task<Void, Never>?
     private var loadAttempted = false
 
-    init(model: ModelDescriptor, router: RuntimeRouter, device: DeviceCapabilities) {
+    init(model: ModelDescriptor, router: RuntimeRouter, device: DeviceCapabilities,
+         onInferenceCompleted: (@Sendable (InferenceMetadata) -> Void)? = nil) {
         self.model = model
         self.router = router
         self.device = device
+        self.onInferenceCompleted = onInferenceCompleted
     }
 
     /// Decision for the current model, so the container can show an honest
@@ -149,6 +154,9 @@ final class ChatViewModel {
                 tokensPerSecond: result.metadata.tokensPerSecond,
                 generatedTokens: result.metadata.generatedTokens
             )
+            if result.metadata.tokensPerSecond != nil {
+                onInferenceCompleted?(result.metadata)
+            }
         case .failed(let error):
             failStreaming(with: error.userMessage)
         default:

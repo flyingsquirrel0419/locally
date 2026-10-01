@@ -12,10 +12,15 @@ final class CompatibilityProvider {
     static let shared = CompatibilityProvider()
 
     private(set) var profile: DeviceProfile?
+    /// Last device benchmark; persisted to UserDefaults so speed estimates
+    /// survive relaunch. Nothing is estimated until a real benchmark ran.
     private(set) var benchmark: BenchmarkResult?
 
     private let profiler: DeviceProfiler = SystemDeviceProfiler()
     private var loadTask: Task<Void, Never>?
+
+    /// UserDefaults key for the persisted benchmark snapshot.
+    private static let benchmarkDefaultsKey = "locally.deviceBenchmark.v1"
 
     /// Runtimes linked into this app build. MLX arrives when the package is
     /// integrated; the rest are in the package.
@@ -38,9 +43,11 @@ final class CompatibilityProvider {
 
     private init() {}
 
-    /// Idempotent: kicks off the device profile load once.
+    /// Idempotent: kicks off the device profile load once and restores any
+    /// persisted device benchmark.
     func ensureLoaded() {
         guard loadTask == nil else { return }
+        benchmark = Self.loadPersistedBenchmark()
         loadTask = Task { [weak self] in
             let profile = await self?.profiler.profile()
             await MainActor.run { self?.profile = profile }
@@ -51,6 +58,23 @@ final class CompatibilityProvider {
     func refresh() async {
         let profile = await profiler.profile()
         self.profile = profile
+    }
+
+    /// Record a device benchmark (called by Home when a run completes) and
+    /// persist it so the speed estimate survives relaunch.
+    func recordBenchmark(_ result: BenchmarkResult) {
+        guard !result.cancelled else { return }
+        benchmark = result
+        if let data = try? JSONEncoder().encode(result) {
+            UserDefaults.standard.set(data, forKey: Self.benchmarkDefaultsKey)
+        }
+    }
+
+    private static func loadPersistedBenchmark() -> BenchmarkResult? {
+        guard let data = UserDefaults.standard.data(forKey: benchmarkDefaultsKey) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(BenchmarkResult.self, from: data)
     }
 
     func report(for descriptor: ModelDescriptor,

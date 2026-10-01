@@ -9,7 +9,14 @@ struct ChatView: View {
 
     init(model: ModelDescriptor, registry: RuntimeRegistry) {
         _viewModel = State(initialValue: ChatViewModel(
-            model: model, router: registry.router, device: registry.device))
+            model: model, router: registry.router, device: registry.device,
+            onInferenceCompleted: { metadata in
+                // Registry id is "\(repoID)@\(revision)"; the analyzer stores
+                // the revision in descriptor.metadata at install time.
+                let id = "\(model.repoID)@\(model.metadata["revision"] ?? "main")"
+                Task { try? await ModelLibraryRuntime.shared.holder.registry?
+                    .recordBenchmark(id: id, sample: metadata) }
+            }))
     }
 
     var body: some View {
