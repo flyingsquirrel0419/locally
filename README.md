@@ -13,7 +13,7 @@ run them locally. No cloud inference.
 | Vision-language | MLXVLM, Apple GPU | Implemented; needs on-device verification. Single-turn only |
 | Image generation | Core ML (vendored ml-stable-diffusion), SD 1.x/2.x/XL | Implemented; needs on-device verification |
 | Video understanding | frame sampling over a VLM, map-reduce | Implemented; needs on-device verification |
-| Decision (structured QA) | token log-prob scoring over the text backend | Implemented; GGUF token-scoring backend pending (validated-generation fallback in place) |
+| Decision (structured QA) | token log-prob scoring over the text backend | Implemented; llama.cpp scoring backend live-tested on Linux; MLX models use the validated-generation fallback |
 | Video generation | — | **Unavailable** — honestly reported; no on-device model fits |
 | Audio / speech / embedding / reranker | — | **Unavailable** — no runtimes implemented |
 | `trust_remote_code` models | — | Refused by design (see SECURITY.md) |
@@ -84,8 +84,9 @@ the honest unsupported list.
 - VLM requests are single-turn.
 - iPhone performance is not yet measured; the only numbers on record are a
   Linux x86 CPU baseline (PERFORMANCE.md).
-- GGUF decision answers use the validated-generation fallback until the
-  llama token-scoring backend lands.
+- Decision questions on MLX-backed models use the validated-generation
+  fallback (the llama.cpp scoring backend covers GGUF; MLXLMCommon does
+  not expose per-token logits).
 - Memory-pressure race: a model that grows after the load-time budget
   check can still trigger jetsam before the policy observer reacts
   (see SECURITY.md, residual risks).
