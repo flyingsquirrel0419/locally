@@ -148,3 +148,91 @@ Automatic retry is capped at 3 with injected-clock exponential backoff
 (1/2/4 s), and 401/403 (`HTTPStatusError`) are never retried. The
 "only while charging" policy pauses via the same code path as user pause,
 so resume data is captured identically.
+
+## Week 4
+
+### 2026-10-01 — Resume re-queues instead of jumping to downloading
+
+`DownloadManager.resume()` previously set the file to `.downloading`
+directly, bypassing the reducer and the serialized queue pump. The reducer
+now maps `(paused, .resume) → .queued`, so `schedule()` owns the single
+start path and the resumed file competes for slots fairly with queued work.
+Progress is reset to 0 at re-queue because byte progress is recomputed
+from the part file on the next start.
+
+### 2026-10-01 — Redirect policy is a pure function, host matching is exact
+
+All redirect auth-stripping funnels through
+`RedirectPolicy.sanitize(request:original:)` — a pure, testable function
+returning nil (refuse) for non-HTTPS targets and stripping `Authorization`
+unless the target host exactly equals or is a true subdomain of an allowed
+HF host (`huggingface.co`, `hf.co`). Suffix matching without the dot
+(`hasSuffix("huggingface.co")`) accepted `evilhuggingface.co`; the
+lookalike cases are pinned by tests. Every URLSession transport (HFClient,
+Foundation download, iOS background download) installs a
+`willPerformHTTPRedirection` delegate calling the same function.
+
+### 2026-10-01 — Free space on Linux comes from statvfs
+
+swift-corelibs-foundation lacks `volumeAvailableCapacityForImportantUsage`,
+so the Linux free-space default was `.max` ("unknown — proceed"). The
+provider now calls `statvfs` (`f_bavail × f_frsize`, the unprivileged
+number) on Linux via Glibc, keeping the Apple key on Apple platforms. The
+manager still treats `.max` as skip, which now only occurs when statvfs
+itself fails.
+
+### 2026-10-01 — Registry state sits in a Mutex so reads are nonisolated
+
+`ModelRegistry` is an actor (mutations serialize), but its model map lives
+in a `Mutex<[String: InstalledModel]>`, so `list()`, `get(id:)`,
+`recentModels(limit:)`, and `storageSummary()` are nonisolated synchronous
+reads. SwiftUI view models and Home polling read without `await`, and tests
+avoid `await`-in-autoclosure pitfalls (XCTUnwrap et al. cannot wrap an
+`await` expression). Persistence stays actor-isolated.
+
+### 2026-10-01 — Revision is pinned and "/" is escaped in resolve URLs
+
+The analyzer records the commit sha in descriptor metadata; the Add Model
+flow pins the install to that sha so users get exactly what was analyzed
+(branch `main` moves under you). HF resolve URLs keep slashes only in the
+file path, not the revision: the revision is escaped with `urlPathAllowed`
+minus `/` so `refs/pr/7` becomes `refs%2Fpr%2F7` rather than an extra path
+segment.
+
+### 2026-10-01 — directorySize skips directory entries; summary has slack
+
+Linux reports ~4096 bytes per directory entry, which polluted storage
+totals, so `directorySize` counts only regular files. The registry writes
+a per-model `metadata.json` beside the weights, so `sizeOnDisk` recomputed
+at registration includes it; tests assert bounds rather than exact byte
+equality to allow the metadata overhead.
+
+### 2026-10-01 — Live Week-4 verification runs as a standalone script
+
+The end-to-end live check (analyze → install → registry → sha256) needs
+both LocallyHF and LocallyStorage, and no existing test target depends on
+both — adding one would mean editing Package.swift, which the concurrent
+runtime worker owns. The check is therefore a standalone scratchpad script
+compiled against the built modules (`-I .build/debug/Modules`) and run
+once with `LOCALLY_LIVE_DL=1`, not a test-target addition.
+
+### 2026-10-01 — Reconcile flags and reports, never silently deletes
+
+Launch reconcile marks models whose files vanished with `hasMissingFiles`
+(UI shows a warning and disables Run) and reports orphan directories in
+`ReconcileReport.orphanDirectories` without deleting them — orphan cleanup
+is a user decision, since an orphan may be a model the registry lost track
+of, not garbage.
+
+### 2026-10-01 — Linux live runs cap download concurrency at 1
+
+swift-corelibs-foundation's `_HTTPURLProtocol.configureEasyHandle` fatals
+with `libcurl.Easy Code=43` when two download tasks on the same session
+start concurrently (reproduced deterministically with the default
+`concurrentFileLimit: 2` on Swift 6.1.2/Linux; each file alone and
+sequential execution complete fine). This is a platform bug in corelibs'
+curl multi handling, not in the package — the manager's own queue logic
+behaves identically at limit 1 and 2. Live verification scripts therefore
+pass `concurrentFileLimit: 1` on Linux; the iOS background transport
+(UIURLSession background session) is unaffected. Production default stays
+2, since the shipping platform is iOS.
