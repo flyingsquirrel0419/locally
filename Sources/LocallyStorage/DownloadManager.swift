@@ -468,48 +468,5 @@ public actor DownloadManager {
         try JSONEncoder().encode(metadata).write(to: url, options: .atomic)
     }
 
-    static func sha256Hex(of url: URL) throws -> String {
-        var hasher = StreamingSHA256()
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        while true {
-            let chunk = try handle.read(upToCount: 1 << 20) ?? Data()
-            if chunk.isEmpty { break }
-            hasher.update(chunk)
-        }
-        return hasher.finalize()
-    }
-
-    static func mapError(_ error: Error) -> LocallyError {
-        if let le = error as? LocallyError { return le }
-        let nsError = error as NSError
-        if nsError.domain == NSURLErrorDomain {
-            return .network(userMessage: "The network connection failed.",
-                            technicalDetail: "NSURLErrorDomain \(nsError.code)")
-        }
-        // Disk-full surfaced mid-write (POSIX ENOSPC) is a storage problem,
-        // not a generic download failure — the user needs to free space.
-        if nsError.domain == NSPOSIXErrorDomain && nsError.code == ENOSPC {
-            return .insufficientStorage(
-                userMessage: "Not enough storage. Free up space and retry the download.",
-                technicalDetail: "ENOSPC while writing the download")
-        }
-        return .downloadFailed(userMessage: "The download failed.",
-                               technicalDetail: String(describing: error))
-    }
-
-    /// 4xx auth failures are never retried automatically.
-    static func isAuthFailure(_ error: Error) -> Bool {
-        let nsError = error as NSError
-        if nsError.domain == NSURLErrorDomain && (nsError.code == NSURLErrorUserAuthenticationRequired) { return true }
-        if let code = (error as? HTTPStatusError)?.statusCode { return code == 401 || code == 403 }
-        return false
-    }
-
-    static func isNetworkish(_ error: Error) -> Bool {
-        let nsError = error as NSError
-        return nsError.domain == NSURLErrorDomain
-    }
-
     deinit { eventTask?.cancel() }
 }
