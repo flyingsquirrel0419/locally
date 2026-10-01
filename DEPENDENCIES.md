@@ -86,22 +86,28 @@ stripping). swift-transformers + swift-jinja are pure Swift and add
 under 2 MB. Weights are never bundled — models are downloaded at
 runtime into Application Support.
 
-## ml-stable-diffusion (Apple only, app target)
+## ml-stable-diffusion (Apple only, app target) — vendored
 
-- **Version pin**: commit `ea2805dc1945be20561c77e5f6d1d9a5a637cda2` on
-  `main` (2026-09-11). The repository ships no git tags, so the pin is an
-  exact commit, referenced by `revision:` in project.yml.
+- **Source**: vendored copy at `Vendor/StableDiffusion`, taken from
+  upstream commit `ea2805dc1945be20561c77e5f6d1d9a5a637cda2` on `main`
+  (2026-09-11; the repo ships no git tags). Referenced as a local package
+  (`path: Vendor/StableDiffusion`) in project.yml.
+- **Why vendored, not pinned**: upstream's Package.swift declares
+  `swift-transformers` exact 0.1.8, which cannot coexist with the app's
+  exact 1.3.4. Only the SD3 path uses Transformers upstream and
+  DiffusionRuntime never uses SD3, so the SD3/T5 sources
+  (StableDiffusion3Pipeline(+Resources), TextEncoderT5,
+  MultiModalDiffusionTransformer, DiscreteFlowScheduler, T5Tokenizer), the
+  CLI target, and upstream tests were dropped. Everything else is
+  byte-identical to upstream; `Vendor/StableDiffusion/VENDORED.md` lists
+  the removals verbatim.
 - **License**: MIT — https://github.com/apple/ml-stable-diffusion/blob/main/LICENSE.md
 - **Upstream**: https://github.com/apple/ml-stable-diffusion
 - **Product used**: `StableDiffusion`
 - **Platforms**: iOS 16.2+ / macOS 13.1+ per its Package.swift; our iOS 17
   floor satisfies both. The XL pipeline (`StableDiffusionXLPipeline`)
   requires iOS 17, matching our floor exactly.
-- **Notes**: its Package.swift declares `swift-transformers` exact 0.1.8,
-  but no library target imports `Transformers` (only the Python conversion
-  tooling does), so the transitive pin is unused by the compiled library
-  and is overridden by the app-level 1.3.4 pin. Resource bundle layout
-  consumed at runtime: `TextEncoder.mlmodelc`, `Unet.mlmodelc` (or
-  `UnetChunk1.mlmodelc` + `UnetChunk2.mlmodelc` for split_einsum),
-  `VAEDecoder.mlmodelc`, optional `VAEEncoder.mlmodelc` and
+- **Resource bundle layout consumed at runtime**: `TextEncoder.mlmodelc`,
+  `Unet.mlmodelc` (or `UnetChunk1.mlmodelc` + `UnetChunk2.mlmodelc` for
+  split_einsum), `VAEDecoder.mlmodelc`, optional `VAEEncoder.mlmodelc` and
   `SafetyChecker.mlmodelc`, plus `vocab.json` and `merges.txt`.
