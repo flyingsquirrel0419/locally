@@ -623,3 +623,24 @@ exactly one `.completed` (with PNG `.image` artifacts and step-rate
 metadata) or one `.failed`; the safety checker returning nil for every
 image is a failure, not an empty success. Thermal state critical refuses
 the run; serious attaches a warning to the first progress event.
+
+## Week 12a
+
+**ml-stable-diffusion is vendored, not pinned.** Upstream @ ea2805dc pins
+swift-transformers `exact: "0.1.8"`, which cannot coexist with the app's
+`exact: 1.3.4` (kept deliberately: Tokenizers 1.3.4 is what the app links
+and what mlx-swift-lm 3.31.4's transitive graph is validated against).
+Only the SD3 path upstream uses Transformers, and DiffusionRuntime never
+uses SD3, so the SD3/T5 sources (StableDiffusion3Pipeline(+Resources),
+TextEncoderT5, MultiModalDiffusionTransformer, DiscreteFlowScheduler,
+T5Tokenizer), the CLI target, and the upstream tests were dropped; the
+`discreteFlowScheduler` enum case, its two switch arms, and the
+`schedulerTimestepShift` config property went with them. Everything else
+is byte-identical to upstream (Vendor/StableDiffusion/VENDORED.md lists
+the removals verbatim). Resolved dependency graph after the change:
+Locally → mlx-swift-lm 3.31.4 → mlx-swift upToNextMinor(0.31.4) [pin
+0.31.4 satisfies] → swift-numerics 1.x; mlx-swift-lm → swift-syntax
+602.0.0..<604.0.0; Locally → swift-transformers 1.3.4 → swift-jinja
+2.4.2..<3.0.0, swift-huggingface 0.8.1..<0.9.0, swift-collections 1.x,
+swift-crypto 3.0.0..<5.0.0, yyjson exact 0.12.0. No shared dependency,
+no conflict.

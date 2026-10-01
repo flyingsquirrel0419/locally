@@ -19,9 +19,11 @@ packages:
   swift-transformers:
     url: https://github.com/huggingface/swift-transformers
     exactVersion: 1.3.4
-  ml-stable-diffusion:
-    url: https://github.com/apple/ml-stable-diffusion
-    revision: ea2805dc1945be20561c77e5f6d1d9a5a637cda2
+  # Vendored copy of apple/ml-stable-diffusion @ ea2805dc with the SD3/T5
+  # sources (and their swift-transformers 0.1.8 pin) removed — see
+  # Vendor/StableDiffusion/VENDORED.md.
+  StableDiffusion:
+    path: Vendor/StableDiffusion
 targets:
   Locally:
     type: application
@@ -56,7 +58,7 @@ targets:
       product: Tokenizers
     - package: mlx-swift-lm
       product: MLXVLM
-    - package: ml-stable-diffusion
+    - package: StableDiffusion
       product: StableDiffusion
     info:
       path: App/Info.plist
