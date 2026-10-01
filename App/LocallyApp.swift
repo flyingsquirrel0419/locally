@@ -20,6 +20,8 @@ struct LocallyApp: App {
         ModelLibraryRuntime.shared.start()
         // Runtime registry + cross-tab navigation for the playground.
         AppRuntime.shared.start()
+        // App-wide resource policy: memory warnings, thermal, low-power.
+        ResourcePolicyObserver.shared.start()
     }
 
     var body: some Scene {
@@ -46,7 +48,18 @@ struct RootTabView: View {
     @StateObject private var tabSelection = TabSelection()
 
     var body: some View {
-        TabView(selection: $tabSelection.selection) {
+        VStack(spacing: 0) {
+            if let banner = ResourcePolicyObserver.shared.bannerMessage {
+                Text(banner)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.vertical, 6)
+                    .background(.yellow.opacity(0.25))
+                    .accessibilityLabel(banner)
+            }
+            TabView(selection: $tabSelection.selection) {
             HomeView()
                 .tabItem {
                     Label(String(localized: "tab.home"), systemImage: "gauge.with.dots.needle.bottom.50percent")
@@ -72,7 +85,8 @@ struct RootTabView: View {
                     Label(String(localized: "tab.settings"), systemImage: "gearshape")
                 }
                 .tag(TabSelection.Tab.settings)
+            }
+            .environmentObject(tabSelection)
         }
-        .environmentObject(tabSelection)
     }
 }

@@ -58,6 +58,30 @@ public struct VideoPressureProbe: Sendable {
             },
             lowPowerMode: { ProcessInfo.processInfo.isLowPowerModeEnabled })
     }
+
+    /// Live probe that also applies the app-wide resource policy's frame
+    /// budget (thermal pressure or low-power mode shrinks the frame count
+    /// even when the raw ProcessInfo state hasn't crossed a threshold yet).
+    @MainActor
+    public static func policyAware(_ observer: ResourcePolicyObserver = .shared) -> VideoPressureProbe {
+        let base = VideoPressureProbe.system
+        return VideoPressureProbe(
+            thermalLevel: {
+                // The observer's scale < 1 means the policy wants fewer
+                // frames; report one level hotter so the planner shrinks.
+                if observer.videoFrameBudgetScale < 1.0 {
+                    switch base.thermalLevel() {
+                    case .nominal: return .fair
+                    case .fair: return .serious
+                    case .serious, .critical: return .critical
+                    }
+                }
+                return base.thermalLevel()
+            },
+            lowPowerMode: {
+                base.lowPowerMode() || observer.lowPowerMode
+            })
+    }
     #endif
 }
 

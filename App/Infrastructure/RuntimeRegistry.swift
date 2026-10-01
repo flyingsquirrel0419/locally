@@ -1,7 +1,12 @@
 import Foundation
 import LocallyCore
+import LocallyDevice
 import LocallyRuntime
 import LocallyStorage
+
+#if canImport(MLXLLM) && canImport(UIKit)
+import MLX
+#endif
 
 /// Builds and owns the app's runtimes: GGUF (llama.cpp, from the shared
 /// package) and MLX (app target only, when the SPM packages are linked and
@@ -29,6 +34,38 @@ final class RuntimeRegistry {
         self.runtimes = runtimes
         self.router = RuntimeRouter(runtimes: runtimes)
         self.device = RuntimeRegistry.probeDevice()
+        wireResourcePolicy()
+    }
+
+    /// The app-wide resource policy owns memory-warning/thermal/low-power
+    /// handling; the registry supplies the side effects it requests.
+    private func wireResourcePolicy() {
+        let observer = ResourcePolicyObserver.shared
+        observer.handlers.unloadIdleModel = { [weak self] _ in
+            await self?.unloadActive()
+        }
+        observer.handlers.clearAcceleratorCaches = {
+            #if canImport(MLXLLM) && canImport(UIKit)
+            MLX.Memory.clearCache()
+            #endif
+        }
+        // Stop-generation and media-cache clearing are handled by the
+        // playgrounds, which own their generation tasks and decoded-image
+        // state and observe ResourcePolicyObserver.shared directly.
+    }
+
+    /// Token pacing hook for throttled generation: callers await this
+    /// between tokens when the policy is throttling. No-op otherwise.
+    func paceTokenIfThrottled() async {
+        let delay = ResourcePolicyObserver.shared.interTokenDelayNanoseconds
+        if delay > 0 {
+            try? await Task.sleep(nanoseconds: delay)
+        }
+    }
+
+    /// Gate checked before loading a model for heavy inference.
+    func heavyInferenceGate() -> (allowed: Bool, reason: String?) {
+        ResourcePolicyObserver.shared.gateHeavyInference()
     }
 
     static func probeDevice() -> DeviceCapabilities {

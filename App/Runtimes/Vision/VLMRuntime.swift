@@ -77,33 +77,11 @@ public final class VLMRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     }
     private let state = LoadState()
 
-    /// Non-Sendable observer token, boxed so the runtime stays Sendable.
-    private final class ObserverBox: @unchecked Sendable {
-        var token: NSObjectProtocol?
-    }
-    private let observerBox = ObserverBox()
     #endif
 
-    public init() {
-        #if canImport(MLXVLM) && canImport(UIKit)
-        observerBox.token = NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            guard let self else { return }
-            Task { await self.unload() }
-        }
-        #endif
-    }
-
-    deinit {
-        #if canImport(MLXVLM) && canImport(UIKit)
-        if let token = observerBox.token {
-            NotificationCenter.default.removeObserver(token)
-        }
-        #endif
-    }
+    // Memory warnings are handled app-wide by ResourcePolicyObserver; this
+    // runtime registers no NotificationCenter observers of its own.
+    public init() {}
 
     // MARK: - Compatibility
 

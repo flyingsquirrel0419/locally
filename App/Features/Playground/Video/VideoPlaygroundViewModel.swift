@@ -110,7 +110,9 @@ final class VideoPlaygroundViewModel {
         progress = 0
         progressPhase = nil
 
-        let pipeline = VideoUnderstandingPipeline(probe: .system)
+        // The policy-aware probe folds ResourcePolicyObserver's frame-budget
+        // scale (thermal/low-power pressure) into the planner's live state.
+        let pipeline = VideoUnderstandingPipeline(probe: .policyAware())
         let budget = Int64(min(device.physicalMemory / 4, 1_000_000_000))
         let requested = frameBudget.count
         let mode = self.mode

@@ -122,12 +122,6 @@ public final class MLXRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     }
     private let state = LoadState()
 
-    /// Non-Sendable observer token, boxed so the runtime stays Sendable.
-    private final class ObserverBox: @unchecked Sendable {
-        var token: NSObjectProtocol?
-    }
-    private let observerBox = ObserverBox()
-
     /// Fixed cap for MLX's Metal buffer cache. 64 MB is enough to keep the
     /// steady-state decode loop from re-allocating its small temporaries
     /// every token, but small enough that a memory warning isn't a cached
@@ -135,26 +129,9 @@ public final class MLXRuntime: ModelCompatibleRuntime, @unchecked Sendable {
     public static let cacheLimitBytes = 64 * 1024 * 1024
     #endif
 
-    public init() {
-        #if canImport(MLXLLM) && canImport(UIKit)
-        observerBox.token = NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            guard let self else { return }
-            Task { await self.unload() }
-        }
-        #endif
-    }
-
-    deinit {
-        #if canImport(MLXLLM) && canImport(UIKit)
-        if let token = observerBox.token {
-            NotificationCenter.default.removeObserver(token)
-        }
-        #endif
-    }
+    // Memory warnings are handled app-wide by ResourcePolicyObserver; this
+    // runtime registers no NotificationCenter observers of its own.
+    public init() {}
 
     /// Architecture string from a local config.json without loading weights;
     /// used so runtime overrides for MLX format models can be checked even

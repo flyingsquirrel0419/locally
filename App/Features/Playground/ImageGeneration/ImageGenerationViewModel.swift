@@ -57,6 +57,11 @@ final class ImageGenerationViewModel {
 
     func generate() {
         guard canGenerate else { return }
+        let gate = ResourcePolicyObserver.shared.gateHeavyInference()
+        guard gate.allowed else {
+            lastError = gate.reason
+            return
+        }
         isGenerating = true
         lastError = nil
         phase = nil
@@ -76,6 +81,7 @@ final class ImageGenerationViewModel {
             input: .text(prompt),
             parameters: GenerationParameters(maxTokens: stepCount, seed: seed))
 
+        ResourcePolicyObserver.shared.setActivity(.imageGeneration)
         generationTask = Task { [weak self] in
             guard let self else { return }
             guard let runtime = registry.router.runtime(for: descriptor, on: registry.device) else {
@@ -101,6 +107,7 @@ final class ImageGenerationViewModel {
             await MainActor.run {
                 self.isGenerating = false
                 self.phase = nil
+                ResourcePolicyObserver.shared.setActivity(.idle)
             }
         }
     }
@@ -110,6 +117,16 @@ final class ImageGenerationViewModel {
         generationTask = nil
         isGenerating = false
         phase = nil
+    }
+
+    /// App-wide resource policy entry point: cancel the active generation
+    /// and surface the reason.
+    func stopForResourcePolicy(reason: String) {
+        guard isGenerating else { return }
+        cancel()
+        lastError = reason
+        // Decoded image frames are the media cache the policy wants freed.
+        images = []
     }
 
     private func handle(_ event: AIEvent, started: Date, request: AIRequest) async {
