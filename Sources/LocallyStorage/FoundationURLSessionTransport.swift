@@ -129,6 +129,16 @@ public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
         }
     }
 
+    /// Never forward Authorization across hosts on redirect (HF /resolve/
+    /// bounces to CDN hosts; anything else must not see the token).
+    public func urlSession(_ session: URLSession, task: URLSessionTask,
+                           willPerformHTTPRedirection response: HTTPURLResponse,
+                           newRequest request: URLRequest,
+                           completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(RedirectPolicy.sanitize(request: request,
+                                                  original: task.originalRequest ?? request))
+    }
+
     public func urlSession(_ session: URLSession, task: URLSessionTask,
                            didCompleteWithError error: Error?) {
         guard let download = task as? URLSessionDownloadTask,

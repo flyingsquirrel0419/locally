@@ -5,6 +5,8 @@ import LocallyCore
 /// resulting descriptor before any download decision.
 struct AddModelSheet: View {
     @State private var viewModel = AddModelViewModel()
+    @Environment(ModelLibraryHolder.self) private var library
+    @EnvironmentObject private var tabSelection: TabSelection
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -126,6 +128,27 @@ struct AddModelSheet: View {
         } header: {
             Text(String(format: String(localized: "models.result.files", table: "HF"),
                         d.requiredFiles.count))
+        }
+
+        Section {
+            Button {
+                viewModel.download(using: library.installService)
+            } label: {
+                if viewModel.didQueueDownload {
+                    Label(String(localized: "models.add.downloading", table: "Models"),
+                          systemImage: "checkmark.circle")
+                } else {
+                    Text(String(localized: "models.add.download", table: "Models"))
+                }
+            }
+            .disabled(d.requiredFiles.isEmpty || viewModel.didQueueDownload
+                      || library.installService == nil)
+        }
+        .onChange(of: viewModel.didQueueDownload) { _, queued in
+            if queued {
+                dismiss()
+                tabSelection.selection = .downloads
+            }
         }
     }
 

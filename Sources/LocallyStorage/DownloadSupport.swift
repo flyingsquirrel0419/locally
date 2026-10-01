@@ -2,6 +2,9 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+#if os(Linux)
+import Glibc
+#endif
 import LocallyCore
 
 /// Injectable clock for deterministic backoff tests.
@@ -31,9 +34,9 @@ public struct FreeSpaceProvider: Sendable {
 
     public init(freeBytes: @escaping @Sendable () -> Int64 = {
         #if os(Linux)
-        // swift-corelibs-foundation lacks volume capacity keys; report unknown
-        // and let the download attempt proceed rather than guessing.
-        return .max
+        // swift-corelibs-foundation lacks volume capacity keys, but statvfs
+        // gives a real answer for the filesystem backing the home directory.
+        return Self.linuxFreeBytes(path: NSHomeDirectory()) ?? .max
         #else
         let url = URL(fileURLWithPath: NSHomeDirectory())
         guard let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
@@ -45,6 +48,17 @@ public struct FreeSpaceProvider: Sendable {
     }) {
         self.freeBytes = freeBytes
     }
+
+    #if os(Linux)
+    /// Bytes available to an unprivileged process on the filesystem that
+    /// holds `path` (f_bavail × f_frsize). Nil when statvfs fails.
+    public static func linuxFreeBytes(path: String) -> Int64? {
+        var stats = statvfs()
+        guard statvfs(path, &stats) == 0 else { return nil }
+        let bytes = UInt64(stats.f_bavail) * UInt64(stats.f_frsize)
+        return bytes > Int64.max ? .max : Int64(bytes)
+    }
+    #endif
 }
 
 /// Simple typed HTTP status error so transports can signal 4xx/5xx cleanly.

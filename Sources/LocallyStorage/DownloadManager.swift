@@ -103,8 +103,10 @@ public actor DownloadManager {
     public func resume(jobID: UUID) async throws {
         guard var job = try await store.job(id: jobID) else { return }
         for index in job.files.indices where job.files[index].state == .paused {
-            // Route back through the queue so scheduling starts it cleanly.
-            job.files[index].state = .queued
+            // Resume goes through the reducer (paused -> queued) so the
+            // scheduling pump owns the queued -> preparing -> downloading path.
+            let current = DownloadState(pausedPersisted: job.files[index])
+            apply(DownloadReducer.reduce(current, .resume), to: &job.files[index])
             job.files[index].progress = 0
         }
         _ = try await store.upsert(job)

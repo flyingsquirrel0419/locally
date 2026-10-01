@@ -1,6 +1,7 @@
 import SwiftUI
 import LocallyCore
 import LocallyDevice
+import LocallyStorage
 
 @Observable
 final class HomeViewModel {
@@ -10,13 +11,42 @@ final class HomeViewModel {
     var isBenchmarking = false
     var thermalState: DeviceProfile.ThermalState = .nominal
 
+    // Library + downloads summary
+    var installedCount = 0
+    var recentModels: [InstalledModel] = []
+    var activeDownloadCount = 0
+
     private let profiler: DeviceProfiler = SystemDeviceProfiler()
     private var thermalTask: Task<Void, Never>?
     private var benchmarkTask: Task<Void, Never>?
+    private var summaryTask: Task<Void, Never>?
 
     func load() async {
         profile = await profiler.profile()
         startThermalMonitoring()
+    }
+
+    /// Poll the registry + download manager slowly; these counts change on
+    /// the order of seconds at fastest.
+    func startSummaryPolling(registry: ModelRegistry?, manager: DownloadManager?) {
+        guard summaryTask == nil else { return }
+        summaryTask = Task { [weak self] in
+            while !Task.isCancelled {
+                if let registry {
+                    let models = registry.list()
+                    let recent = registry.recentModels(limit: 3)
+                    await MainActor.run {
+                        self?.installedCount = models.count
+                        self?.recentModels = recent
+                    }
+                }
+                if let manager, let jobs = try? await manager.jobs() {
+                    let active = jobs.filter { !$0.isFinished }.count
+                    await MainActor.run { self?.activeDownloadCount = active }
+                }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
     }
 
     func runBenchmark() {
@@ -52,11 +82,14 @@ final class HomeViewModel {
     deinit {
         thermalTask?.cancel()
         benchmarkTask?.cancel()
+        summaryTask?.cancel()
     }
 }
 
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
+    @Environment(ModelLibraryHolder.self) private var library
+    @Environment(DownloadManagerHolder.self) private var downloads
 
     var body: some View {
         NavigationStack {
@@ -64,6 +97,7 @@ struct HomeView: View {
                 VStack(spacing: DS.Spacing.md) {
                     scoreCard
                     benchmarkButton
+                    libraryCard
                     deviceCard
                     statusCard
                 }
@@ -71,7 +105,44 @@ struct HomeView: View {
             }
             .background(DS.Color.background)
             .navigationTitle(String(localized: "home.title"))
-            .task { await viewModel.load() }
+            .task {
+                await viewModel.load()
+                viewModel.startSummaryPolling(registry: library.registry,
+                                              manager: downloads.manager)
+            }
+            .onChange(of: library.registry != nil) { _, _ in
+                viewModel.startSummaryPolling(registry: library.registry,
+                                              manager: downloads.manager)
+            }
+        }
+    }
+
+    private var libraryCard: some View {
+        Card {
+            VStack(spacing: DS.Spacing.sm) {
+                Text(String(localized: "home.models.installed", table: "Models"))
+                    .font(DS.Typography.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                MetricRow(title: String(localized: "home.models.installed", table: "Models"),
+                          value: "\(viewModel.installedCount)",
+                          systemImage: "shippingbox")
+                MetricRow(title: String(localized: "home.downloads.active", table: "Models"),
+                          value: viewModel.activeDownloadCount == 0
+                                 ? String(localized: "home.downloads.none", table: "Models")
+                                 : "\(viewModel.activeDownloadCount)",
+                          systemImage: "arrow.down.circle")
+                if !viewModel.recentModels.isEmpty {
+                    Text(String(localized: "home.models.recent", table: "Models"))
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(DS.Color.secondaryLabel)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(viewModel.recentModels) { model in
+                        MetricRow(title: model.descriptor.name,
+                                  value: ModelLibraryViewModel.formatBytes(model.sizeOnDisk),
+                                  systemImage: "clock")
+                    }
+                }
+            }
         }
     }
 

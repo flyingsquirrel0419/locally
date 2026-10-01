@@ -51,8 +51,8 @@ public enum DownloadReducer {
         case (.downloading, .verify): return .verifying
         case (.downloading, .complete): return .completed
         case (.downloading, .fail(let e)): return .failed(e)
-        // From paused
-        case (.paused, .resume): return .downloading(progress: 0)
+        // From paused: resume re-queues so scheduling owns the start path
+        case (.paused, .resume): return .queued
         case (.paused, .fail(let e)): return .failed(e)
         // From verifying
         case (.verifying, .complete): return .completed

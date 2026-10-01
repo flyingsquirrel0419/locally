@@ -93,9 +93,10 @@ public actor HFClient {
     // MARK: - Internals
 
     private func get(path: String, extraHeaders: [String: String] = [:]) async throws -> HTTPResponse {
+        // Exact host or true subdomain only: "evilhuggingface.co" must fail.
         guard let url = URL(string: path, relativeTo: apiBase)?.absoluteURL,
               url.scheme == "https", let host = url.host,
-              host.hasSuffix("huggingface.co") || host == "hf.co" || apiBase != Self.defaultAPIBase else {
+              RedirectPolicy.isAllowedHFHost(host) || apiBase != Self.defaultAPIBase else {
             throw LocallyError.network(
                 userMessage: "Refused to contact a non-Hugging Face server.",
                 technicalDetail: "URL validation failed for path \(path)"

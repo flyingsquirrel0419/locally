@@ -129,4 +129,17 @@ final class HFClientTests: XCTestCase {
             }
         }
     }
+
+    /// The URL guard must accept only huggingface.co / hf.co and true
+    /// subdomains — never lookalikes such as evilhuggingface.co.
+    func testHostValidationRejectsLookalikes() {
+        XCTAssertTrue(RedirectPolicy.isAllowedHFHost("huggingface.co"))
+        XCTAssertTrue(RedirectPolicy.isAllowedHFHost("hf.co"))
+        XCTAssertTrue(RedirectPolicy.isAllowedHFHost("cas-bridge.xethub.hf.co"))
+        XCTAssertTrue(RedirectPolicy.isAllowedHFHost("cdn-lfs.hf.co"))
+        XCTAssertFalse(RedirectPolicy.isAllowedHFHost("evilhuggingface.co"))
+        XCTAssertFalse(RedirectPolicy.isAllowedHFHost("huggingface.co.evil.com"))
+        XCTAssertFalse(RedirectPolicy.isAllowedHFHost("hf.co.attacker.io"))
+        XCTAssertFalse(RedirectPolicy.isAllowedHFHost("nothuggingface.co"))
+    }
 }
