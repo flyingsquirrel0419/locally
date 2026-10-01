@@ -60,7 +60,7 @@ jobs:
         run: |
           for f in App/Resources/*.xcstrings; do python3 -m json.tool "$f" > /dev/null || exit 1; done
           plutil -lint App/Locally.entitlements
-      - name: Test (includes app build and app smoke tests)
+      - name: Test (includes app build, app smoke tests, and package tests)
         run: |
           # Keep compiling after the first error so one run reports failures
           # from all targets instead of one module per CI iteration.
@@ -70,9 +70,43 @@ jobs:
             -project Locally.xcodeproj \
             -scheme Locally \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -resultBundlePath TestResults.xcresult \
             -skipMacroValidation \
             -skipPackagePluginValidation \
             -quiet 2>&1 | tee xcodebuild.log
+      - name: Test results summary
+        if: always()
+        run: |
+          if [ ! -d TestResults.xcresult ]; then
+            echo "No TestResults.xcresult produced (build likely failed before tests ran)."
+            exit 0
+          fi
+          {
+            echo "### iOS Simulator test results"
+            echo '```'
+            if ! xcrun xcresulttool get test-results summary --path TestResults.xcresult 2>/dev/null; then
+              # Pre-Xcode-16 fallback: legacy JSON export with a compact summary.
+              xcrun xcresulttool get --legacy --format json --path TestResults.xcresult \
+                | python3 -c '
+                    import json,sys
+                    d=json.load(sys.stdin)
+                    for t in d.get("issues",{}).get("testFailureSummaries",{}).get("_values",[]):
+                        print("FAIL:", t.get("message",{}).get("_value",""))
+                    m=d.get("metrics",{})
+                    print("tests:", m.get("testsCount",{}).get("_value","?"),
+                          "failures:", m.get("testsFailedCount",{}).get("_value","?"))
+                  '
+            fi
+            echo '```'
+          } | tee /dev/stderr >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload xcresult
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults-xcresult
+          path: TestResults.xcresult
+          if-no-files-found: ignore
+          compression-level: 9
       - name: Surface build errors in step summary
         if: failure()
         run: |

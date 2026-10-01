@@ -22,6 +22,9 @@ struct PlaygroundView: View {
     @State private var selectedID: String?
     @State private var mode: PlaygroundMode = .chat
     @State private var selectionTask: Task<Void, Never>?
+    /// Human-readable reason a model failed to load, surfaced inline so a
+    /// failed load is visible instead of silently dropping the selection.
+    @State private var loadError: String?
 
     init() {}
 
@@ -92,7 +95,14 @@ struct PlaygroundView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let model = selectedModel,
+        if let loadError {
+            ContentUnavailableView {
+                Label(String(localized: "playground.loadFailed", table: "Playground"),
+                      systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(loadError)
+            }
+        } else if let model = selectedModel,
            let registry = runtimes.registry {
             session(for: model, registry: registry)
         } else {
@@ -275,14 +285,21 @@ struct PlaygroundView: View {
 
     private func select(id: String?) {
         selectedID = id
+        loadError = nil
         selectionTask?.cancel()
         guard let id, let registry = runtimes.registry else { return }
         guard let model = installedTextModels.first(where: { $0.id == id }) else { return }
         let prepared = preparedDescriptor(for: model, registry: registry)
         // One large model at a time: selecting a new model releases the old.
         selectionTask = Task {
-            try? await library.registry?.markUsed(id: id)
-            try? await registry.load(model: prepared)
+            do {
+                try await library.registry?.markUsed(id: id)
+                try await registry.load(model: prepared)
+            } catch is CancellationError {
+                // Selection changed; nothing to surface.
+            } catch {
+                loadError = ErrorPresentation.userMessage(for: error)
+            }
         }
     }
 

@@ -102,6 +102,94 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.tests
         SWIFT_STRICT_CONCURRENCY: complete
         GENERATE_INFOPLIST_FILE: YES
+  # Package test suites re-hosted as iOS unit-test bundles so the full
+  # library test matrix also runs on the simulator, not just AppTests.
+  # LocallyE2ETests stays Linux-only: its fixtures run the real HTTP stack
+  # against localhost, which the simulator sandbox does not permit.
+  LocallyCoreTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+    - path: Tests/LocallyCoreTests
+    dependencies:
+    - package: Locally
+      product: LocallyCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.coretests
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+  LocallyDeviceTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+    - path: Tests/LocallyDeviceTests
+    dependencies:
+    - package: Locally
+      product: LocallyDevice
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.devicetests
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+  LocallyHFTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+    - path: Tests/LocallyHFTests
+    dependencies:
+    - package: Locally
+      product: LocallyHF
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.hftests
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+  LocallyCompatibilityTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+    - path: Tests/LocallyCompatibilityTests
+    dependencies:
+    - package: Locally
+      product: LocallyCompatibility
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.compatibilitytests
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+  LocallyStorageTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+    - path: Tests/LocallyStorageTests
+    dependencies:
+    - package: Locally
+      product: LocallyStorage
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.storagetests
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+  LocallyRuntimeTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+    - path: Tests/LocallyRuntimeTests
+    dependencies:
+    - package: Locally
+      product: LocallyRuntime
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.runtimetests
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   Locally:
     build:
@@ -109,9 +197,27 @@ schemes:
         Locally: all
         LocallyTests:
         - test
+        LocallyCoreTests:
+        - test
+        LocallyDeviceTests:
+        - test
+        LocallyHFTests:
+        - test
+        LocallyCompatibilityTests:
+        - test
+        LocallyStorageTests:
+        - test
+        LocallyRuntimeTests:
+        - test
     run:
       config: Debug
     test:
       config: Debug
       targets:
       - LocallyTests
+      - LocallyCoreTests
+      - LocallyDeviceTests
+      - LocallyHFTests
+      - LocallyCompatibilityTests
+      - LocallyStorageTests
+      - LocallyRuntimeTests

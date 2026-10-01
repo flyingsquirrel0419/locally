@@ -51,7 +51,9 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
     }
 
     /// Called by the app delegate when iOS relaunches the app for this session.
-    public func handleEvents(completionHandler: @escaping () -> Void) {
+    /// Callers wrap UIKit's non-Sendable `() -> Void` (invoked once, on the
+    /// main thread) before passing it here.
+    public func handleEvents(completionHandler: @escaping @Sendable () -> Void) {
         BackgroundSessionCoordinator.shared.registerCompletionHandler(completionHandler,
                                                                       for: Self.sessionIdentifier)
     }
@@ -187,11 +189,12 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
 public final class BackgroundSessionCoordinator: @unchecked Sendable {
     public static let shared = BackgroundSessionCoordinator()
 
-    private let handlers = LockedState<[String: () -> Void]>([:])
+    private let handlers = LockedState<[String: @Sendable () -> Void]>([:])
 
     private init() {}
 
-    public func registerCompletionHandler(_ handler: @escaping () -> Void, for identifier: String) {
+    public func registerCompletionHandler(_ handler: @escaping @Sendable () -> Void,
+                                          for identifier: String) {
         handlers.withLock { $0[identifier] = handler }
     }
 

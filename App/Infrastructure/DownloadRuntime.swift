@@ -46,7 +46,13 @@ final class DownloadRuntime: NSObject {
     /// queue.
     func handleEventsForBackgroundURLSession(_ identifier: String,
                                              completionHandler: @escaping () -> Void) {
-        let mainThreadHandler = { DispatchQueue.main.async(execute: completionHandler) }
+        // The UIApplicationDelegate signature is `() -> Void` (non-Sendable),
+        // but the coordinator's registry requires @Sendable. Box the handler:
+        // it is only ever invoked once, on the main thread.
+        let boxed = CompletionHandlerBox(completionHandler)
+        let mainThreadHandler: @Sendable () -> Void = {
+            DispatchQueue.main.async { boxed.invoke() }
+        }
         guard identifier == URLSessionBackgroundTransport.sessionIdentifier else {
             completionHandler()
             return
@@ -58,4 +64,12 @@ final class DownloadRuntime: NSObject {
             ?? BackgroundSessionCoordinator.shared.registerCompletionHandler(mainThreadHandler,
                                                                              for: identifier)
     }
+}
+
+/// @unchecked Sendable wrapper for UIKit's non-Sendable completion handler;
+/// the handler is invoked at most once and only on the main thread.
+private final class CompletionHandlerBox: @unchecked Sendable {
+    private let handler: () -> Void
+    init(_ handler: @escaping () -> Void) { self.handler = handler }
+    func invoke() { handler() }
 }

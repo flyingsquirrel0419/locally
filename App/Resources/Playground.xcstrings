@@ -385,6 +385,22 @@
         }
       }
     },
+    "playground.loadFailed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load the model"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모델을 불러오지 못했습니다"
+          }
+        }
+      }
+    },
     "playground.mode": {
       "localizations": {
         "en": {
