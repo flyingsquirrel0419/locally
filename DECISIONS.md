@@ -309,3 +309,38 @@ every byte offset and assert a thrown error, never a crash.
 unsupported reason; a risky rating shows the warning and requires an
 explicit "Try Anyway". The metrics footer displays only values measured by
 the runtime (load time, TTFT, tok/s, token count) — nil renders as "–".
+
+## Week 5
+
+**mlx-swift-lm pinned at 3.31.4, not the latest 3.32.3.** 3.32.x moved to
+swift-tools 6.2, which requires Xcode 26; our CI runs macos-15 with the
+XcodeGen-generated project on the stable Xcode, so 3.31.4 (tools 6.1) is
+the newest usable tag. mlx-swift is pinned explicitly at 0.31.4 (the floor
+of mlx-swift-lm's `.upToNextMinor`) so the app can link `MLX`/`MLXRandom`
+products directly for memory controls, and swift-transformers at 1.3.4.
+
+**Memory controls use `MLX.Memory`, not `MLX.GPU.set(cacheLimit:)`.** The
+GPU entry points forward to `MLX.Memory.memoryLimit` / `cacheLimit` and are
+deprecated in mlx-swift 0.31.4. Budgets: memoryLimit = 55% of physical
+RAM, cacheLimit = 25% — conservative for an iOS app sharing the device
+with the jetsam watchdog; a memory-warning notification unloads the model
+and clears the cache.
+
+**Tokenizer integration is adapter-based, no macros, no downloader.**
+mlx-swift-lm 3.x loads tokenizers through a `TokenizerLoader` protocol;
+we implement it with swift-transformers' `AutoTokenizer.from(modelFolder:)`
+against the installed model directory, so inference never touches the
+network or the HF hub. The adapter bridges `Tokenizers.Tokenizer` to
+`MLXLMCommon.Tokenizer` one-to-one.
+
+**RuntimeRegistry holds one active large model at a time.** Loading a new
+model unloads the previous one; load identity is the model id
+(repoID@revision) since the registry never holds two models. Availability
+is honest per runtime kind: GGUF iff the llama library is linked, MLX iff
+the library is linked and a Metal device exists — the simulator reports
+"unavailable on Simulator" instead of failing at load time.
+
+**Chat history is shared, not per-runtime.** Both GGUF and MLX runtimes
+consume the same `TextGenerationSession` (system prompt + turns) and
+`GenerationParameters` from LocallyRuntime, so the playground UI and
+controls are runtime-agnostic; only the load/execute paths differ.

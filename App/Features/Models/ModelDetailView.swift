@@ -9,6 +9,7 @@ struct ModelDetailView: View {
     let viewModel: ModelLibraryViewModel
 
     @Environment(ModelLibraryHolder.self) private var library
+    @Environment(AppNavigation.self) private var navigation
     @EnvironmentObject private var tabSelection: TabSelection
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirm = false
@@ -175,6 +176,7 @@ struct ModelDetailView: View {
         Task {
             try? await library.registry?.markUsed(id: model.id)
             await MainActor.run {
+                navigation.playgroundModelID = model.id
                 tabSelection.selection = .playground
             }
         }
