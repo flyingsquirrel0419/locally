@@ -4,6 +4,11 @@ import LocallyCore
 #if canImport(Darwin)
 import Darwin
 #endif
+#if canImport(MachO)
+// mach_vm_basic_info_data_t / MACH_VM_BASIC_INFO live in the MachO module
+// on Apple SDKs (they are not visible via plain `import Darwin`).
+import MachO
+#endif
 
 #if canImport(CLlama)
 import CLlama

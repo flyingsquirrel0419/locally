@@ -3,6 +3,13 @@ import LocallyCore
 import LocallyRuntime
 import Observation
 
+#if canImport(ImageIO)
+import ImageIO
+#endif
+#if canImport(UIKit)
+import UIKit
+#endif
+
 /// Drives the vision playground: owns the picked images (as raw data plus
 /// thumbnails), streams VLM runtime events, and exposes metrics. Images are
 /// downsampled off the main actor before they ever reach the runtime.
@@ -11,7 +18,7 @@ import Observation
 final class VisionPlaygroundViewModel {
     /// One picked image: raw bytes (kept for inference) plus a small
     /// thumbnail for display.
-    struct PickedImage: Identifiable {
+    struct PickedImage: Identifiable, Sendable {
         let id = UUID()
         let data: Data
         let thumbnailData: Data
@@ -164,8 +171,9 @@ final class VisionPlaygroundViewModel {
     }
 
     /// Decode header dimensions and render a display thumbnail without
-    /// ever decoding the full image (ImageIO thumbnail path).
-    private static func makePickedImage(data: Data) -> PickedImage? {
+    /// ever decoding the full image (ImageIO thumbnail path). `nonisolated`
+    /// so the detached decode task can call it without a MainActor hop.
+    private nonisolated static func makePickedImage(data: Data) -> PickedImage? {
         #if canImport(ImageIO) && canImport(CoreImage) && canImport(UIKit)
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)

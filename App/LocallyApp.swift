@@ -1,4 +1,5 @@
 import SwiftUI
+import LocallyCore
 import LocallyHF
 
 @main

@@ -62,14 +62,19 @@ public struct VideoPressureProbe: Sendable {
     /// Live probe that also applies the app-wide resource policy's frame
     /// budget (thermal pressure or low-power mode shrinks the frame count
     /// even when the raw ProcessInfo state hasn't crossed a threshold yet).
+    /// Internal because ResourcePolicyObserver is app-internal.
     @MainActor
-    public static func policyAware(_ observer: ResourcePolicyObserver = .shared) -> VideoPressureProbe {
+    static func policyAware(_ observer: ResourcePolicyObserver = .shared) -> VideoPressureProbe {
         let base = VideoPressureProbe.system
+        // Snapshot MainActor state now; the probe's @Sendable closures can't
+        // read it later.
+        let budgetScale = observer.videoFrameBudgetScale
+        let lowPower = observer.lowPowerMode
         return VideoPressureProbe(
             thermalLevel: {
                 // The observer's scale < 1 means the policy wants fewer
                 // frames; report one level hotter so the planner shrinks.
-                if observer.videoFrameBudgetScale < 1.0 {
+                if budgetScale < 1.0 {
                     switch base.thermalLevel() {
                     case .nominal: return .fair
                     case .fair: return .serious
@@ -79,7 +84,7 @@ public struct VideoPressureProbe: Sendable {
                 return base.thermalLevel()
             },
             lowPowerMode: {
-                base.lowPowerMode() || observer.lowPowerMode
+                base.lowPowerMode() || lowPower
             })
     }
     #endif

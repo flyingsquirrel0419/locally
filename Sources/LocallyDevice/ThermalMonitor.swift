@@ -24,14 +24,24 @@ public struct ThermalMonitor: Sendable {
             ) { _ in
                 continuation.yield(map(ProcessInfo.processInfo.thermalState))
             }
+            // NSObjectProtocol isn't Sendable; box it so the @Sendable
+            // onTermination closure can capture it. The box never escapes.
+            let boxed = ObserverBox(observer)
             continuation.onTermination = { _ in
-                center.removeObserver(observer)
+                center.removeObserver(boxed.value)
             }
         }
         #endif
     }
 
     #if !os(Linux)
+    /// @unchecked Sendable wrapper for NSObjectProtocol observer tokens; the
+    /// token is only ever read once in `onTermination`.
+    private struct ObserverBox: @unchecked Sendable {
+        let value: any NSObjectProtocol
+        init(_ value: any NSObjectProtocol) { self.value = value }
+    }
+
     private func map(_ state: ProcessInfo.ThermalState) -> DeviceProfile.ThermalState {
         switch state {
         case .nominal: return .nominal

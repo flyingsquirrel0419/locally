@@ -29,7 +29,7 @@ struct ChatView: View {
             metricsFooter
             inputBar
         }
-        .navigationTitle(model.name)
+        .navigationTitle(viewModel.modelName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

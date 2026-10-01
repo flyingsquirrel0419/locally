@@ -40,6 +40,8 @@ final class ChatViewModel {
     var contextLength: Int?
 
     private let model: ModelDescriptor
+    /// Display name for the navigation title (ChatView reads this).
+    var modelName: String { model.name }
     private let router: RuntimeRouter
     private let device: DeviceCapabilities
     /// Called with each completed run's measured metadata so the library can

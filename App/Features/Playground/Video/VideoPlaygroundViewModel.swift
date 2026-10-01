@@ -81,6 +81,12 @@ final class VideoPlaygroundViewModel {
         }
     }
 
+    /// Surface a picker/loading error from the view (e.g. when
+    /// `loadTransferable` fails before we have a URL to work with).
+    func reportPickerFailure(_ message: String) {
+        lastError = message
+    }
+
     /// PhotosPicker hands us a Movie whose URL may be transient; copy it
     /// into our own temp location so the pipeline can reopen it freely.
     func setVideo(data tempSource: URL, duration: TimeInterval) {

@@ -18,9 +18,11 @@ final class HomeViewModel {
     var activeDownloadCount = 0
 
     private let profiler: DeviceProfiler = SystemDeviceProfiler()
-    private var thermalTask: Task<Void, Never>?
-    private var benchmarkTask: Task<Void, Never>?
-    private var summaryTask: Task<Void, Never>?
+    // Task.cancel() is thread-safe; nonisolated(unsafe) lets deinit cancel
+    // without violating MainActor isolation.
+    private nonisolated(unsafe) var thermalTask: Task<Void, Never>?
+    private nonisolated(unsafe) var benchmarkTask: Task<Void, Never>?
+    private nonisolated(unsafe) var summaryTask: Task<Void, Never>?
 
     func load() async {
         profile = await profiler.profile()

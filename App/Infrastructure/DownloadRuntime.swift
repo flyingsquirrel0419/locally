@@ -5,6 +5,9 @@ import LocallyStorage
 /// App-delegate glue for the background URLSession: constructs the shared
 /// DownloadManager (background transport on iOS) and routes
 /// `application(_:handleEventsForBackgroundURLSession:)` to it.
+/// All entry points are MainActor (app delegate / app init), so isolate the
+/// whole type to MainActor to make `shared` concurrency-safe.
+@MainActor
 final class DownloadRuntime: NSObject {
     static let shared = DownloadRuntime()
 

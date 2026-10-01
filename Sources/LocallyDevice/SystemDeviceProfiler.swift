@@ -27,6 +27,9 @@ public struct SystemDeviceProfiler: DeviceProfiler {
             osProcAvailable: osProc
         )
 
+        // UIDevice is @MainActor on iOS; read battery there.
+        let battery = await batterySnapshot()
+
         return DeviceProfile(
             modelIdentifier: modelIdentifier(),
             osVersion: osVersionString(),
@@ -36,8 +39,8 @@ public struct SystemDeviceProfiler: DeviceProfiler {
             recommendedMaxWorkingSet: budget,
             freeStorage: free,
             totalStorage: total,
-            batteryLevel: batteryLevel(),
-            batteryState: batteryState(),
+            batteryLevel: battery.level,
+            batteryState: battery.state,
             lowPowerMode: lowPowerModeEnabled(processInfo),
             thermalState: currentThermalState(processInfo),
             processorCount: processInfo.processorCount,
@@ -108,29 +111,26 @@ public struct SystemDeviceProfiler: DeviceProfiler {
         #endif
     }
 
-    private func batteryLevel() -> Float? {
+    /// UIDevice is @MainActor; bundle both battery reads behind one hop.
+    /// `nil` level / `.unknown` state off Apple platforms.
+    private func batterySnapshot() async -> (level: Float?, state: DeviceProfile.BatteryState) {
         #if canImport(UIKit) && os(iOS)
-        let device = UIDevice.current
-        device.isBatteryMonitoringEnabled = true
-        let level = device.batteryLevel
-        return level >= 0 ? level : nil
-        #else
-        return nil
-        #endif
-    }
-
-    private func batteryState() -> DeviceProfile.BatteryState {
-        #if canImport(UIKit) && os(iOS)
-        let device = UIDevice.current
-        device.isBatteryMonitoringEnabled = true
-        switch device.batteryState {
-        case .unplugged: return .unplugged
-        case .charging: return .charging
-        case .full: return .full
-        default: return .unknown
+        return await MainActor.run {
+            let device = UIDevice.current
+            device.isBatteryMonitoringEnabled = true
+            let rawLevel = device.batteryLevel
+            let level: Float? = rawLevel >= 0 ? rawLevel : nil
+            let state: DeviceProfile.BatteryState
+            switch device.batteryState {
+            case .unplugged: state = .unplugged
+            case .charging: state = .charging
+            case .full: state = .full
+            default: state = .unknown
+            }
+            return (level, state)
         }
         #else
-        return .unknown
+        return (nil, .unknown)
         #endif
     }
 
@@ -209,7 +209,9 @@ public struct SystemDeviceProfiler: DeviceProfiler {
             ])
             let free = values.volumeAvailableCapacityForImportantUsage
             let total = values.volumeTotalCapacity
-            return (free.map(Int64.init), total.map(Int64.init))
+            // `Int64.init` is ambiguous here (multiple overloads); spell out
+            // the conversion so Xcode can pick exactly one.
+            return (free.map { Int64($0) }, total.map { Int64($0) })
         } catch {
             return (nil, nil)
         }

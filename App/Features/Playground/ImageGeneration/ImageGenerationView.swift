@@ -152,16 +152,20 @@ struct ImageGenerationView: View {
                 .foregroundStyle(DS.Color.bad)
         }
         if let seconds = viewModel.lastSeconds, !viewModel.isGenerating {
-            var line = String(localized: "imagegen.stats.time", table: "ImageGeneration")
-                + " " + seconds.formatted(.number.precision(.fractionLength(1))) + " s"
-            if let seed = viewModel.lastSeedUsed {
-                line += " · " + String(localized: "imagegen.stats.seed", table: "ImageGeneration")
-                    + " \(seed)"
-            }
-            Text(line)
+            Text(statsLine(seconds: seconds))
                 .font(DS.Typography.caption)
                 .foregroundStyle(DS.Color.secondaryLabel)
         }
+    }
+
+    private func statsLine(seconds: Double) -> String {
+        var line = String(localized: "imagegen.stats.time", table: "ImageGeneration")
+            + " " + seconds.formatted(.number.precision(.fractionLength(1))) + " s"
+        if let seed = viewModel.lastSeedUsed {
+            line += " · " + String(localized: "imagegen.stats.seed", table: "ImageGeneration")
+                + " \(seed)"
+        }
+        return line
     }
 
     @ViewBuilder

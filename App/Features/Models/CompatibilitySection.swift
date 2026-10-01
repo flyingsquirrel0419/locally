@@ -23,8 +23,9 @@ final class CompatibilityProvider {
     private static let benchmarkDefaultsKey = "locally.deviceBenchmark.v1"
 
     /// Runtimes linked into this app build. MLX arrives when the package is
-    /// integrated; the rest are in the package.
-    private static func isAvailable(_ kind: RuntimeKind) -> Bool {
+    /// integrated; the rest are in the package. `nonisolated` because the
+    /// function is pure and is passed as a @Sendable predicate.
+    private nonisolated static func isAvailable(_ kind: RuntimeKind) -> Bool {
         switch kind {
         case .mlx:
             #if canImport(MLX)

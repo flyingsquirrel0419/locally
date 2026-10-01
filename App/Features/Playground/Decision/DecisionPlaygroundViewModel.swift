@@ -185,12 +185,13 @@ final class DecisionPlaygroundViewModel {
         lastError = nil
 
         let decisionRuntime = DecisionRuntime(wrapping: textRuntime, model: model)
-        let document: JSONValue = .object([
+        // AIRequest.Input.json takes the top-level object as a dictionary.
+        let document: [String: JSONValue] = [
             "state": .string(schema.state),
             "questions": .object(Dictionary(uniqueKeysWithValues: schema.questions.map {
                 ($0.key, Self.schemaObject(for: $0))
             })),
-        ])
+        ]
         let request = AIRequest(model: model, input: .json(document))
         let start = ContinuousClock.now
 

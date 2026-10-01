@@ -20,14 +20,22 @@ public final class DiffusionRuntime: ModelCompatibleRuntime, @unchecked Sendable
 
     private let planner = DiffusionPlanner()
 
+    /// ml-stable-diffusion's `StableDiffusionPipelineProtocol` is not
+    /// `Sendable`, but pipelines are only touched from one detached task at
+    /// a time (load, generate, or unload), which this box asserts. Access is
+    /// additionally funnelled through the `State` actor below.
+    private struct PipelineBox: @unchecked Sendable {
+        let value: any StableDiffusionPipelineProtocol
+    }
+
     /// Loaded pipeline plus the configuration it was loaded with. Guarded by
     /// an actor; a run holds a strong reference for its whole duration so
     /// `unload()` mid-run releases memory only after generation ends.
     private actor State {
-        var pipeline: (any StableDiffusionPipelineProtocol)?
+        var pipeline: PipelineBox?
         var loadTime: TimeInterval = 0
         var cancelled = false
-        func store(_ pipeline: any StableDiffusionPipelineProtocol, _ loadTime: TimeInterval) {
+        func store(_ pipeline: PipelineBox, _ loadTime: TimeInterval) {
             self.pipeline = pipeline
             self.loadTime = loadTime
             self.cancelled = false
@@ -96,35 +104,38 @@ public final class DiffusionRuntime: ModelCompatibleRuntime, @unchecked Sendable
         let reduceMemory = ProcessInfo.processInfo.physicalMemory < 8 * 1024 * 1024 * 1024
         let attention = model.metadata["diffusion_attention"] ?? "split_einsum"
         let started = Date()
-        let pipeline: any StableDiffusionPipelineProtocol = try await Task.detached(priority: .userInitiated) {
+        let box: PipelineBox = try await Task.detached(priority: .userInitiated) {
             let configuration = MLModelConfiguration()
             // split_einsum is required for the Neural Engine; original
             // attention runs on the GPU instead.
             configuration.computeUnits = attention == "original"
                 ? .cpuAndGPU : .cpuAndNeuralEngine
             let isXL = model.metadata["diffusion_resolution"] == "1024"
+            let pipeline: any StableDiffusionPipelineProtocol
             if isXL {
-                return try StableDiffusionXLPipeline(
+                pipeline = try StableDiffusionXLPipeline(
                     resourcesAt: root, configuration: configuration,
                     reduceMemory: reduceMemory)
+            } else {
+                pipeline = try StableDiffusionPipeline(
+                    resourcesAt: root, controlNet: [], configuration: configuration,
+                    disableSafety: false, reduceMemory: reduceMemory)
             }
-            return try StableDiffusionPipeline(
-                resourcesAt: root, controlNet: [], configuration: configuration,
-                disableSafety: false, reduceMemory: reduceMemory)
+            return PipelineBox(value: pipeline)
         }.value
         // Eagerly load (or prewarm, in reduceMemory mode) so the first run
         // isn't charged for model compilation.
         try await Task.detached(priority: .userInitiated) {
-            try pipeline.loadResources()
+            try box.value.loadResources()
         }.value
-        await state.store(pipeline, Date().timeIntervalSince(started))
+        await state.store(box, Date().timeIntervalSince(started))
     }
 
     public func unload() async {
-        let pipeline = await state.pipeline
+        let box = await state.pipeline
         await state.clear()
-        if let pipeline {
-            await Task.detached(priority: .utility) { pipeline.unloadResources() }.value
+        if let box {
+            await Task.detached(priority: .utility) { box.value.unloadResources() }.value
         }
     }
 
@@ -193,13 +204,14 @@ public final class DiffusionRuntime: ModelCompatibleRuntime, @unchecked Sendable
                     continuation.yield(.preparing(warning))
                 }
 
-                guard let pipeline = await state.pipeline else {
+                guard let box = await state.pipeline else {
                     continuation.yield(.failed(.runtimeUnavailable(
                         userMessage: "The model isn't loaded yet.",
                         technicalDetail: "run called before load")))
                     continuation.finish()
                     return
                 }
+                let pipeline = box.value
 
                 continuation.yield(.preparing("Loading model"))
                 let started = Date()

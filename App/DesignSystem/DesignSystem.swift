@@ -86,7 +86,7 @@ struct ScoreGauge: View {
 
     private var fraction: Double {
         guard let score else { return 0 }
-        return min(1, max(0, Double(score) / Double(max)))
+        return Swift.min(1, Swift.max(0, Double(score) / Double(max)))
     }
 
     private var tint: Color {

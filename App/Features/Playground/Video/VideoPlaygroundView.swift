@@ -213,7 +213,7 @@ struct VideoPlaygroundView: View {
     private func loadPickedVideo(_ item: PhotosPickerItem) async {
         guard let movie = try? await item.loadTransferable(type: PickedMovie.self)
         else {
-            viewModel.lastError = String(localized: "video.pick.failed", table: "Video")
+            viewModel.reportPickerFailure(String(localized: "video.pick.failed", table: "Video"))
             return
         }
         let asset = AVURLAsset(url: movie.url)
