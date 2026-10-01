@@ -1,0 +1,158 @@
+name: Release IPA
+
+# Builds an UNSIGNED device .ipa for a release tag and attaches it (plus its
+# sha256) to the GitHub release. The device build intentionally uses the
+# official llama.cpp xcframework (iOS device slice) from Package.swift — the
+# local .deps/llama-apple xcframework built for CI's simulator runs is NOT
+# produced here, so Package.swift falls back to the pinned binary target.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build and attach assets to (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-ipa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Ensure no local llama xcframework
+        run: |
+          # Force Package.swift onto the official pinned binary target
+          # (llama-b11146 xcframework, iOS-device + macOS slices). A stale
+          # .deps/llama-apple from a cache or earlier step would win instead.
+          rm -rf .deps/llama-apple
+          if [ -e .deps/llama-apple ]; then
+            echo "::error::.deps/llama-apple still present"
+            exit 1
+          fi
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Archive (unsigned, iOS device)
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project Locally.xcodeproj \
+            -scheme Locally \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Locally.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            2>&1 | tee xcodebuild-archive.log
+
+      - name: Package unsigned IPA
+        run: |
+          APP="build/Locally.xcarchive/Products/Applications/Locally.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::Archived app not found at $APP"
+            exit 1
+          fi
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/
+          IPA="Locally-${TAG}-unsigned.ipa"
+          rm -f "$IPA"
+          zip -qry "$IPA" Payload
+          echo "IPA=$IPA" >> "$GITHUB_ENV"
+          ls -lh "$IPA"
+
+      - name: Verify bundle contents
+        run: |
+          APP="Payload/Locally.app"
+          BIN="$APP/Locally"
+          if [ ! -f "$BIN" ]; then
+            echo "::error::Main binary missing at $BIN"
+            exit 1
+          fi
+          echo '== lipo -info (main binary) =='
+          lipo -info "$BIN" | tee lipo.txt
+          grep -q arm64 lipo.txt || { echo "::error::Main binary is not arm64"; exit 1; }
+
+          echo '== Info.plist =='
+          plutil -p "$APP/Info.plist" | grep -E 'CFBundleIdentifier|CFBundleShortVersionString|CFBundleVersion' | tee plist.txt
+          grep -q 'me.teamwicked.locally' plist.txt || { echo "::error::Unexpected bundle identifier"; exit 1; }
+
+          echo '== Embedded frameworks =='
+          ls -1 "$APP/Frameworks" 2>/dev/null | tee frameworks.txt || true
+          grep -qi '^llama.framework' frameworks.txt \
+            || { echo "::error::llama.framework not embedded"; exit 1; }
+
+          echo '== Metal libraries =='
+          find "$APP" -name '*.metallib' | tee metallibs.txt
+          # mlx-swift requires its default metallib at runtime on device.
+          grep -q 'metallib' metallibs.txt \
+            || { echo "::error::No .metallib found in bundle (MLX would crash on device)"; exit 1; }
+
+      - name: Checksum
+        run: |
+          shasum -a 256 "$IPA" | tee "$IPA.sha256"
+          echo "SHA_FILE=$IPA.sha256" >> "$GITHUB_ENV"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IPA }}-artifacts
+          path: |
+            ${{ env.IPA }}
+            ${{ env.IPA }}.sha256
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$IPA" "$IPA.sha256" --clobber
+
+      - name: Summary
+        run: |
+          {
+            echo "### Unsigned IPA for ${TAG}"
+            echo "- file: \`${IPA}\`"
+            echo "- size: $(du -h "$IPA" | cut -f1)"
+            echo "- sha256: $(cut -d' ' -f1 "$SHA_FILE")"
+            echo
+            echo '```'
+            cat lipo.txt
+            echo '```'
+            echo 'Frameworks:'
+            echo '```'
+            cat frameworks.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Surface build errors in step summary
+        if: failure()
+        run: |
+          {
+            echo "### xcodebuild archive errors"
+            echo '```'
+            grep -E "error:" xcodebuild-archive.log | sed 's/^.*Z //' | sort -u | head -100
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
