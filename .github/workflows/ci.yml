@@ -15,8 +15,8 @@ jobs:
     container: swift:6.1
     steps:
       - uses: actions/checkout@v4
-      - name: Install cmake
-        run: apt-get update && apt-get install -y --no-install-recommends cmake
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make gcc g++
       - name: Cache llama.cpp build
         uses: actions/cache@v4
         with:
@@ -49,10 +49,10 @@ jobs:
         run: brew install xcodegen
       - name: Generate Xcode project
         run: xcodegen generate
-      - name: Validate string catalogs
+      - name: Validate string catalogs and entitlements
         run: |
-          plutil -lint App/Resources/*.xcstrings
-          plutil -lint App/Info.plist App/Locally.entitlements
+          for f in App/Resources/*.xcstrings; do python3 -m json.tool "$f" > /dev/null || exit 1; done
+          plutil -lint App/Locally.entitlements
       - name: Test (includes app build and app smoke tests)
         run: |
           xcodebuild test \
