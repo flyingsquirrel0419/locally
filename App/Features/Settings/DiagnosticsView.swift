@@ -112,7 +112,7 @@ struct ShareableLogFile: Transferable {
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("locally-diagnostics-\(stamp).txt")
             try file.text.write(to: url, atomically: true, encoding: .utf8)
-            return SentTransferFile(url)
+            return SentTransferredFile(url)
         }
     }
 }
