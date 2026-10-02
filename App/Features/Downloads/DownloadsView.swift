@@ -15,8 +15,26 @@ struct DownloadsView: View {
                     )
                 } else {
                     List {
+                        if let error = viewModel.actionError {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(DS.Color.bad)
+                                Text(error)
+                                    .font(DS.Typography.caption)
+                                    .foregroundStyle(DS.Color.label)
+                                    .lineLimit(3)
+                                Spacer()
+                                Button(action: { viewModel.dismissError() }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(DS.Color.secondaryLabel)
+                                }
+                                .accessibilityLabel(String(localized: "action.dismiss", table: "Downloads"))
+                            }
+                            .padding(DS.Spacing.xs)
+                        }
                         ForEach(viewModel.rows) { row in
                             DownloadRowView(row: row,
+                                            isBusy: viewModel.pendingAction(for: row.id) != nil,
                                             onPause: { viewModel.pause(row.id) },
                                             onResume: { viewModel.resume(row.id) },
                                             onCancel: { viewModel.cancel(row.id) },
@@ -58,6 +76,7 @@ struct DownloadsView: View {
 
 private struct DownloadRowView: View {
     let row: DownloadsViewModel.Row
+    let isBusy: Bool
     let onPause: () -> Void
     let onResume: () -> Void
     let onCancel: () -> Void
@@ -121,16 +140,19 @@ private struct DownloadRowView: View {
             Button(action: onPause) {
                 Image(systemName: "pause.fill")
             }
+            .disabled(isBusy)
             .accessibilityLabel(String(localized: "action.pause", table: "Downloads"))
         case .paused:
             Button(action: onResume) {
                 Image(systemName: "play.fill")
             }
+            .disabled(isBusy)
             .accessibilityLabel(String(localized: "action.resume", table: "Downloads"))
         case .failed:
             Button(action: onRetry) {
                 Image(systemName: "arrow.clockwise")
             }
+            .disabled(isBusy)
             .accessibilityLabel(String(localized: "action.retry", table: "Downloads"))
         case .completed, .cancelled:
             EmptyView()
@@ -139,6 +161,7 @@ private struct DownloadRowView: View {
             Button(role: .destructive, action: onCancel) {
                 Image(systemName: "xmark")
             }
+            .disabled(isBusy)
             .accessibilityLabel(String(localized: "action.cancel", table: "Downloads"))
         }
     }

@@ -28,6 +28,16 @@ public actor DownloadManager {
     public private(set) var concurrentFileLimit: Int
     private var runningCount = 0
     private var transferToFile: [DownloadTransport.TransferID: (UUID, Int)] = [:]
+    /// Transfers the manager itself stopped (pause/cancel). A real URLSession
+    /// still delivers didCompleteWithError(NSURLErrorCancelled) and late
+    /// progress callbacks for a cancelled task; without this set those events
+    /// would be handled as failures and the auto-retry would restart a
+    /// transfer the user explicitly stopped.
+    private var intentionallyStopped: Set<DownloadTransport.TransferID> = []
+    /// Jobs being torn down by cancel(). Actor reentrancy lets an in-flight
+    /// event handler or queue pump run between cancel's awaits; without this
+    /// tombstone such a path could upsert the job back after it was removed.
+    private var tombstonedJobs: Set<UUID> = []
     private var eventTask: Task<Void, Never>?
 
     public init(store: DownloadStore, layout: FilesystemLayout, transport: any DownloadTransport,
@@ -79,6 +89,7 @@ public actor DownloadManager {
     private var sourceRegistry: [UUID: [DownloadSource]] = [:]
 
     public func registerSources(_ sources: [DownloadSource], for jobID: UUID) {
+        guard !tombstonedJobs.contains(jobID) else { return }
         sourceRegistry[jobID] = sources
         schedule()
     }
@@ -88,6 +99,7 @@ public actor DownloadManager {
     }
 
     public func pause(jobID: UUID) async throws {
+        guard !tombstonedJobs.contains(jobID) else { return }
         guard var job = try await store.job(id: jobID) else { return }
         for index in job.files.indices {
             let current = DownloadState(pausedPersisted: job.files[index])
@@ -96,19 +108,27 @@ public actor DownloadManager {
             if case .paused = next {
                 job.files[index].pauseReason = PauseReason.user.rawValue
                 if let (transferID, _) = runningTransfers(for: jobID, fileIndex: index).first {
+                    // Detach BEFORE awaiting the transport: the cancellation
+                    // callback (NSURLErrorCancelled, with resume data on
+                    // URLSession) is delivered asynchronously and must not be
+                    // treated as a retryable failure.
+                    transferToFile.removeValue(forKey: transferID)
+                    intentionallyStopped.insert(transferID)
+                    runningCount = max(0, runningCount - 1)
                     if let data = await transport.pause(transferID) {
                         try saveResumeData(data, jobID: jobID, fileIndex: index)
                         job.files[index].hasResumeData = true
                     }
-                    runningCount = max(0, runningCount - 1)
                 }
             }
         }
+        guard !tombstonedJobs.contains(jobID) else { return }
         _ = try await store.upsert(job)
         diagnostics.record("paused by user", jobID: jobID)
     }
 
     public func resume(jobID: UUID) async throws {
+        guard !tombstonedJobs.contains(jobID) else { return }
         guard var job = try await store.job(id: jobID) else { return }
         for index in job.files.indices where job.files[index].state == .paused {
             // Resume goes through the reducer (paused -> queued) so the
@@ -123,19 +143,29 @@ public actor DownloadManager {
     }
 
     public func cancel(jobID: UUID) async throws {
-        guard var job = try await store.job(id: jobID) else { return }
+        // Tombstone FIRST: actor reentrancy means a queued-up event handler
+        // or schedule pump can run at any await below; every read/upsert
+        // path checks this set so the job cannot reappear once removed.
+        tombstonedJobs.insert(jobID)
+        guard var job = try await store.job(id: jobID) else {
+            tombstonedJobs.remove(jobID)
+            return
+        }
         for index in job.files.indices {
             let current = DownloadState(pausedPersisted: job.files[index])
             apply(DownloadReducer.reduce(current, .cancel), to: &job.files[index])
             if let (transferID, _) = runningTransfers(for: jobID, fileIndex: index).first {
-                await transport.cancel(transferID)
+                transferToFile.removeValue(forKey: transferID)
+                intentionallyStopped.insert(transferID)
                 runningCount = max(0, runningCount - 1)
+                await transport.cancel(transferID)
             }
         }
-        _ = try await store.upsert(job)
         layout.removeJobArtifacts(jobID: jobID)
         sourceRegistry.removeValue(forKey: jobID)
         try await store.remove(id: jobID)
+        diagnostics.record("cancelled; partial files deleted", jobID: jobID)
+        tombstonedJobs.remove(jobID)
     }
 
     /// Re-enqueue failed files for another automatic or manual attempt.
@@ -145,6 +175,7 @@ public actor DownloadManager {
     /// so the stale part must be dropped or the fresh bytes would append
     /// onto garbage and fail verification again.
     public func retry(jobID: UUID) async throws {
+        guard !tombstonedJobs.contains(jobID) else { return }
         guard var job = try await store.job(id: jobID) else { return }
         for index in job.files.indices where job.files[index].state == .failed {
             let current = DownloadState(pausedPersisted: job.files[index])
@@ -236,6 +267,7 @@ public actor DownloadManager {
         do {
             let jobs = try await store.allJobs()
             for job in jobs where !job.isFinished {
+                if tombstonedJobs.contains(job.id) { continue }
                 if job.policy.onlyWhileCharging && !power.isCharging() {
                     try await pauseForPolicy(jobID: job.id, reason: .unplugged)
                     continue
@@ -256,6 +288,7 @@ public actor DownloadManager {
     }
 
     private func startFile(job: DownloadJob, fileIndex: Int, sources: [DownloadSource]) async throws {
+        guard !tombstonedJobs.contains(job.id) else { return }
         guard var fresh = try await store.job(id: job.id) else { return }
         guard fileIndex < sources.count, fileIndex < fresh.files.count else { return }
         // Atomicity guard: skip if another path already moved it off .queued.
@@ -291,6 +324,7 @@ public actor DownloadManager {
         apply(DownloadReducer.reduce(DownloadState(pausedPersisted: file), .start), to: &file)
         fresh.files[fileIndex] = file
         _ = try await store.upsert(fresh)
+        guard !tombstonedJobs.contains(job.id) else { return }
 
         var request = URLRequest(url: source.url)
         // Model bytes must arrive untranscoded so size and sha256 match the
@@ -323,6 +357,7 @@ public actor DownloadManager {
     }
 
     private func pauseForPolicy(jobID: UUID, reason: PauseReason) async throws {
+        guard !tombstonedJobs.contains(jobID) else { return }
         guard var job = try await store.job(id: jobID) else { return }
         // Queued files stay queued so the policy auto-lifts on the next pump
         // without a manual resume; only in-flight files are paused.
@@ -335,15 +370,17 @@ public actor DownloadManager {
                 job.files[index].pauseReason = reason.rawValue
                 pausedAny = true
                 if let (transferID, _) = runningTransfers(for: jobID, fileIndex: index).first {
+                    transferToFile.removeValue(forKey: transferID)
+                    intentionallyStopped.insert(transferID)
+                    runningCount = max(0, runningCount - 1)
                     if let data = await transport.pause(transferID) {
                         try saveResumeData(data, jobID: jobID, fileIndex: index)
                         job.files[index].hasResumeData = true
                     }
-                    runningCount = max(0, runningCount - 1)
                 }
             }
         }
-        if pausedAny { _ = try await store.upsert(job) }
+        if pausedAny, !tombstonedJobs.contains(jobID) { _ = try await store.upsert(job) }
         // Record diagnostics even when nothing was in flight: a queued-only
         // job blocked by policy must still explain why it is waiting. The
         // pump is event-driven, so repeat records are bounded.
@@ -373,9 +410,35 @@ public actor DownloadManager {
     }
 
     private func handleEvent(transferID: DownloadTransport.TransferID, event: DownloadTransportEvent) async {
+        // A transfer the manager itself paused/cancelled still delivers its
+        // cancellation callback (NSURLErrorCancelled, possibly with resume
+        // data) and sometimes a trailing progress event. None of these are
+        // failures: consume and ignore them.
+        if intentionallyStopped.contains(transferID) {
+            switch event {
+            case .finished, .failed:
+                intentionallyStopped.remove(transferID)
+            case .progress:
+                break  // keep the marker until the terminal event arrives
+            }
+            return
+        }
         guard let (jobID, fileIndex) = transferToFile[transferID] else { return }
+        // The job was cancelled while this event was in flight: never touch
+        // the store for it — an upsert here would resurrect a removed job.
+        if tombstonedJobs.contains(jobID) {
+            if case .progress = event {} else {
+                transferToFile.removeValue(forKey: transferID)
+            }
+            return
+        }
         do {
-            guard var job = try await store.job(id: jobID), fileIndex < job.files.count else { return }
+            guard var job = try await store.job(id: jobID), fileIndex < job.files.count else {
+                // Job vanished (cancelled) while we awaited the store: drop
+                // the mapping so no later event walks this path again.
+                transferToFile.removeValue(forKey: transferID)
+                return
+            }
             var file = job.files[fileIndex]
             switch event {
             case .progress(let received, _):
@@ -392,7 +455,9 @@ public actor DownloadManager {
                 let progress = file.expectedSize > 0 ? Double(received) / Double(file.expectedSize) : 0
                 apply(DownloadReducer.reduce(current, .progress(min(1, progress))), to: &file)
                 job.files[fileIndex] = file
-                _ = try await store.upsert(job)
+                if !tombstonedJobs.contains(jobID) {
+                    _ = try await store.upsert(job)
+                }
             case .finished(let appending):
                 transferToFile.removeValue(forKey: transferID)
                 runningCount = max(0, runningCount - 1)
@@ -401,6 +466,28 @@ public actor DownloadManager {
             case .failed(let error, let resumeData):
                 transferToFile.removeValue(forKey: transferID)
                 runningCount = max(0, runningCount - 1)
+                // Cancellation of a transfer the manager did NOT stop itself
+                // (system-suspended background task, session invalidation) is
+                // not an error and is never retried: keep the resume data and
+                // pause, so the next pump/resume continues from the bytes on
+                // disk instead of bouncing the file with backoff restarts.
+                if Self.isCancellation(error) {
+                    if let resumeData {
+                        try saveResumeData(resumeData, jobID: jobID, fileIndex: fileIndex)
+                        file.hasResumeData = true
+                    }
+                    let current = DownloadState(pausedPersisted: file)
+                    apply(DownloadReducer.reduce(current,
+                        .pause(resumeDataAvailable: file.hasResumeData)), to: &file)
+                    job.files[fileIndex] = file
+                    if !tombstonedJobs.contains(jobID) {
+                        _ = try await store.upsert(job)
+                    }
+                    diagnostics.record("transfer cancelled by system; paused \(file.relativePath)",
+                                       jobID: jobID, fileIndex: fileIndex)
+                    schedule()
+                    return
+                }
                 if let resumeData {
                     try saveResumeData(resumeData, jobID: jobID, fileIndex: fileIndex)
                     file.hasResumeData = true
@@ -418,7 +505,9 @@ public actor DownloadManager {
         let current = DownloadState(pausedPersisted: file)
         apply(DownloadReducer.reduce(current, .verify), to: &file)
         job.files[fileIndex] = file
-        _ = try await store.upsert(job)
+        if !tombstonedJobs.contains(job.id) {
+            _ = try await store.upsert(job)
+        }
 
         let partURL = try layout.partialFileURL(jobID: job.id, relativePath: file.relativePath)
 
@@ -450,6 +539,7 @@ public actor DownloadManager {
                                repoID: job.modelRepoID, revision: job.revision)
         file.bytesReceived = file.expectedSize
         job.files[fileIndex] = file
+        if tombstonedJobs.contains(job.id) { return }
         _ = try await store.upsert(job)
         diagnostics.record("completed \(file.relativePath) (\(file.expectedSize) bytes)",
                            jobID: job.id, fileIndex: fileIndex)
@@ -479,7 +569,9 @@ public actor DownloadManager {
         file.failureDetail = locallyError.technicalDetail
         file.failureUserMessage = locallyError.userMessage
         job.files[fileIndex] = file
-        _ = try? await store.upsert(job)
+        if !tombstonedJobs.contains(job.id) {
+            _ = try? await store.upsert(job)
+        }
         diagnostics.record("failed \(file.relativePath): \(locallyError.technicalDetail)",
                            jobID: job.id, fileIndex: fileIndex)
     }
@@ -495,7 +587,9 @@ public actor DownloadManager {
             file.failureDetail = locallyError.technicalDetail
             file.failureUserMessage = locallyError.userMessage
             job.files[fileIndex] = file
-            _ = try? await store.upsert(job)
+            if !tombstonedJobs.contains(job.id) {
+                _ = try? await store.upsert(job)
+            }
             diagnostics.record("retrying \(file.relativePath) after error: \(locallyError.technicalDetail)",
                                jobID: job.id, fileIndex: fileIndex)
             let delay = pow(2.0, Double(file.attempts))
@@ -506,7 +600,9 @@ public actor DownloadManager {
             file.failureDetail = locallyError.technicalDetail
             file.failureUserMessage = locallyError.userMessage
             job.files[fileIndex] = file
-            _ = try? await store.upsert(job)
+            if !tombstonedJobs.contains(job.id) {
+                _ = try? await store.upsert(job)
+            }
             diagnostics.record("failed \(file.relativePath): \(locallyError.technicalDetail)",
                                jobID: job.id, fileIndex: fileIndex)
         }

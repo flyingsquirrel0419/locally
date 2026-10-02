@@ -264,6 +264,36 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Something went wrong. Please try again." } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "문제가 발생했습니다. 다시 시도해 주세요." } }
       }
+    },
+    "diagnostics.copyAll" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copy All" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "전체 복사" } }
+      }
+    },
+    "diagnostics.copied" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copied" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "복사됨" } }
+      }
+    },
+    "diagnostics.share" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Share Log" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "로그 공유" } }
+      }
+    },
+    "diagnostics.share.preview" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Locally diagnostics log" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Locally 진단 로그" } }
+      }
+    },
+    "diagnostics.exportedAt" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exported at:" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "보낸 시각:" } }
+      }
     }
   },
   "version" : "1.0"
