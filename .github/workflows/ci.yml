@@ -32,7 +32,7 @@ jobs:
         env:
           LOCALLY_LLAMA: "1"
       - name: Test
-        run: swift test -j 2
+        run: bash scripts/ci-test-linux.sh
         env:
           LOCALLY_LLAMA: "1"
       - name: Localization coverage
@@ -68,10 +68,16 @@ jobs:
           # from all targets instead of one module per CI iteration.
           defaults write com.apple.dt.Xcode IDEBuildingContinueBuildingAfterErrors -bool YES
           set -o pipefail
+          # Pick the newest available iPhone simulator dynamically: runner
+          # images change their installed device set, so a hardcoded name
+          # breaks when the image drops that model.
+          xcrun simctl list devices available -j > sims.json
+          UDID=$(python3 -c "import json; d=json.load(open('sims.json')); p=[(v['name'],r,v['udid']) for r,ds in d['devices'].items() if 'iOS' in r for v in ds if v['isAvailable'] and v['name'].startswith('iPhone')]; p.sort(reverse=True); print(p[0][2])")
+          echo "Using simulator UDID: $UDID"
           xcodebuild test \
             -project Locally.xcodeproj \
             -scheme Locally \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination "id=$UDID" \
             -resultBundlePath TestResults.xcresult \
             -skipMacroValidation \
             -skipPackagePluginValidation \
