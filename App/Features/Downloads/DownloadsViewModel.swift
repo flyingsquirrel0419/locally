@@ -20,11 +20,11 @@ final class DownloadsViewModel {
     }
 
     private(set) var rows: [Row] = []
-    var wifiOnly = false {
-        didSet { applyPolicy() }
+    var wifiOnly = DownloadPolicySettings.load().wifiOnly {
+        didSet { DownloadPolicySettings.save(wifiOnly: wifiOnly, chargingOnly: chargingOnly) }
     }
-    var chargingOnly = false {
-        didSet { applyPolicy() }
+    var chargingOnly = DownloadPolicySettings.load().chargingOnly {
+        didSet { DownloadPolicySettings.save(wifiOnly: wifiOnly, chargingOnly: chargingOnly) }
     }
     var concurrency: Int = 2 {
         didSet { Task { await manager?.setConcurrentFileLimit(concurrency) } }
@@ -73,7 +73,8 @@ final class DownloadsViewModel {
                        state: job.aggregateState, bytesDownloaded: bytes,
                        totalBytes: job.totalBytes,
                        bytesPerSecond: job.aggregateState == .downloading ? speed : nil,
-                       failureMessage: job.files.first(where: { $0.state == .failed })?.failureDetail)
+                       failureMessage: job.files.first(where: { $0.state == .failed })
+                           .map { $0.failureUserMessage ?? $0.failureDetail ?? "" })
         }
     }
 
@@ -96,12 +97,8 @@ final class DownloadsViewModel {
 
     /// Policy toggles apply to future jobs; already-enqueued jobs keep the
     /// policy they started with (visible in the row's state).
-    private func applyPolicy() {
-        // No-op beyond storage: enqueue() reads current values at job creation.
-    }
-
     var currentPolicy: DownloadPolicy {
-        DownloadPolicy(allowsCellular: !wifiOnly, onlyWhileCharging: chargingOnly)
+        DownloadPolicySettings.policy
     }
 
     static func formatBytes(_ bytes: Int64) -> String {
@@ -113,5 +110,29 @@ final class DownloadsViewModel {
             unit += 1
         }
         return String(format: unit == 0 ? "%.0f %@" : "%.1f %@", value, units[unit])
+    }
+}
+
+/// Persists the Downloads-tab policy toggles so Add-Model installs pick
+/// them up; without this the toggles changed nothing (the toggles were the
+/// only policy source and were never read at enqueue time).
+enum DownloadPolicySettings {
+    private static let wifiKey = "downloads.wifiOnly"
+    private static let chargingKey = "downloads.chargingOnly"
+
+    static func load(defaults: UserDefaults = .standard)
+        -> (wifiOnly: Bool, chargingOnly: Bool) {
+        (defaults.bool(forKey: wifiKey), defaults.bool(forKey: chargingKey))
+    }
+
+    static func save(wifiOnly: Bool, chargingOnly: Bool,
+                     defaults: UserDefaults = .standard) {
+        defaults.set(wifiOnly, forKey: wifiKey)
+        defaults.set(chargingOnly, forKey: chargingKey)
+    }
+
+    static var policy: DownloadPolicy {
+        let (wifiOnly, chargingOnly) = load()
+        return DownloadPolicy(allowsCellular: !wifiOnly, onlyWhileCharging: chargingOnly)
     }
 }

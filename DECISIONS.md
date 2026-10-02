@@ -1,5 +1,44 @@
 # Decisions
 
+## 2026-10-02 — Download manager owns resume; transport owns append-vs-replace
+
+The "model download does not work" report on a real iPhone traced to three
+contract breaks between DownloadManager and its transports:
+
+1. **Task identity.** `URLSessionBackgroundTransport.start` stamped
+   `taskDescription` with a locally-issued id, while relaunch reattach
+   assigned *new* ids and never read the description — events from
+   iOS-kept-alive tasks could never be mapped back to job files. The
+   manager now issues a stable `"<jobID>|<fileIndex>"` task key,
+   `start(request:resumeData:destination:taskKey:)` carries it, and the
+   background transport adopts a reattached task with a matching key
+   instead of starting a duplicate.
+2. **Resume append semantics.** `didFinishDownloadingTo` MOVED the temp
+   file over the part file, so a Range-resumed transfer (which receives
+   only the suffix) destroyed the downloaded prefix. The event is now
+   `.finished(appending: Bool)`: the transport appends the suffix when the
+   start carried a Range header or resume data and the destination holds
+   bytes, otherwise it replaces. The manager sets the Range header itself
+   from the part-file size (Range wins over resume data whenever a prefix
+   exists — the prefix is authoritative), and reconciles
+   `bytesReceived` to the full file size on appended finishes so the size
+   check does not fail on a suffix-only count. A stale part file from a
+   failed attempt whose integrity is unknown (bytesReceived == 0, no
+   resume data) is replaced by a fresh 200, never appended onto.
+3. **Silent policy stalls.** `allowsCellular == false` was never enforced
+   and the Wi-Fi/battery state could be unknown at tap time, which would
+   wait forever. The manager now gates `startFile` on injectable
+   `NetworkPathProvider`/`PowerStateProvider` snapshots whose unknown
+   state means "usable" (never block on unknown); blocked in-flight files
+   pause with a persisted `pauseReason`, queued files stay queued so the
+   policy auto-lifts on the next pump, and every block records a
+   diagnostics event. The iOS app wires NWPathMonitor and UIDevice
+   battery state into these providers in `DownloadRuntime`.
+
+All failures and lifecycle events land in a 200-entry diagnostics ring
+buffer (`DownloadManager.recentDiagnostics()`), surfaced at Settings →
+Diagnostics with the LocallyError technicalDetail — never tokens.
+
 ## 2026-10-02 — AIPerformanceIndex uses a non-saturating curve
 
 The original linear map (`score = raw × 1000`, clamped to 1000) made every
@@ -736,3 +775,36 @@ the bundle as an artifact — `-quiet` otherwise hides per-test counts.
 `IDEBuildingContinueBuildingAfterErrors` is set so one run reports errors
 from all targets; a failure-only step greps `error:` lines into the step
 summary. Neither weakens the gate: the job still fails on any test failure.
+
+
+### 2026-10-02 — Hosted E2E tests keep the real background transport; unique session identifier per test
+
+`AppDownloadE2ETests` first hung on the simulator: jobs enqueued, files
+started, zero bytes for 180s (CI run 36946901860). The initial read —
+"background URLSession cannot run in a hosted test runner" — was wrong. The
+real cause: the test bundle is hosted in the Locally app, whose launch runs
+`DownloadRuntime.start` and creates the app's background session with
+identifier `me.teamwicked.locally.downloads`. The test then created a
+SECOND background session with the SAME identifier in the same process —
+Apple documents this as undefined behavior, and in practice the second
+session's tasks never deliver delegate callbacks: exactly the observed
+"started, 0 bytes" stall.
+
+Fix: `URLSessionBackgroundTransport(sessionIdentifier:)` makes the
+identifier injectable (default unchanged); each hosted test uses
+`me.teamwicked.locally.tests.<UUID>` and invalidates the session in
+tearDown (`invalidateAndCancel`). A DEBUG assertion in the transport fires
+when a second live instance reuses an identifier already registered in this
+process, catching accidental double creation in the app itself (only call
+site: `DownloadRuntime.start`, guarded by `holder.manager == nil`). A
+DEBUG-only `onDelegateEvent` sink logs every delegate callback (HTTP status,
+byte counts, error domain/code, task state — never headers/URLs/tokens) so
+a future stall shows exactly which callbacks arrived; the hosted tests wire
+it into their failure output and stdout.
+
+The hosted tests therefore exercise the real on-device path end to end:
+background session + DownloadManager + DownloadStore + FilesystemLayout +
+live HF API and the huggingface.co/resolve → cas-bridge/cdn-lfs redirect
+chain. An earlier revision of the tests that substituted
+`FoundationURLSessionTransport` on iOS was reverted — it would not have
+caught the device bug, which lives in the background-session path.

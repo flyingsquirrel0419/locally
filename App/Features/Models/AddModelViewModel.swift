@@ -85,7 +85,8 @@ final class AddModelViewModel {
         let revision = pinnedRevision ?? "main"
         Task {
             do {
-                _ = try await installService.install(descriptor: descriptor, revision: revision)
+                _ = try await installService.install(descriptor: descriptor, revision: revision,
+                                                     policy: DownloadPolicySettings.policy)
                 didQueueDownload = true
             } catch let error as LocallyError {
                 errorMessage = error.userMessage

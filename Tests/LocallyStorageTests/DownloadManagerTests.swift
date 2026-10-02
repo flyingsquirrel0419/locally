@@ -97,7 +97,7 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: layout.partialDirectory(jobID: job.id).path))
     }
 
-    func testPauseResumeUsesResumeDataThenRangeFallback() async throws {
+    func testPauseResumePrefersRangeFromPartFileOverResumeData() async throws {
         let data = Data((0..<200).map { UInt8($0 % 256) })
         let transport = MockTransport()
         transport.setBehavior(.hang, for: urlA)
@@ -123,9 +123,10 @@ final class DownloadManagerTests: XCTestCase {
             (try? await manager.jobs().first)?.files[0].state == .completed
         }
         XCTAssertTrue(done, "resume did not complete")
-        // Second start should have carried resume data from the mock pause.
+        // Second start must resume from the on-disk prefix via HTTP Range
+        // (Range wins over resume data whenever the part file has bytes).
         XCTAssertEqual(transport.startedRequests.count, 2)
-        XCTAssertTrue(transport.startedRequests[1].hasResumeData)
+        XCTAssertEqual(transport.startedRequests[1].rangeHeader, "bytes=100-")
         XCTAssertEqual(try Data(contentsOf: tempRoot.appendingPathComponent("Models/o_m/main/a.bin")), data)
     }
 

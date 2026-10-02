@@ -15,6 +15,11 @@ struct SettingsView: View {
                     )
                 }
                 huggingFaceSection
+                Section {
+                    NavigationLink(String(localized: "diagnostics.title")) {
+                        DiagnosticsView()
+                    }
+                }
             }
             .navigationTitle(String(localized: "tab.settings"))
             .onAppear { hfViewModel.load() }

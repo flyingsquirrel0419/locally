@@ -20,7 +20,10 @@ public actor DownloadManager {
     private let authHeaderProvider: @Sendable (URL) -> String?
     private let clock: DownloadClock
     private let power: PowerStateProvider
+    private let network: NetworkPathProvider
     private let freeSpace: FreeSpaceProvider
+    /// Ring buffer of recent events for the in-app Diagnostics screen.
+    private let diagnostics = DownloadDiagnosticsLog()
 
     public private(set) var concurrentFileLimit: Int
     private var runningCount = 0
@@ -30,6 +33,7 @@ public actor DownloadManager {
     public init(store: DownloadStore, layout: FilesystemLayout, transport: any DownloadTransport,
                 authHeaderProvider: @escaping @Sendable (URL) -> String? = { _ in nil },
                 clock: DownloadClock = .init(), power: PowerStateProvider = .init(),
+                network: NetworkPathProvider = .init(),
                 freeSpace: FreeSpaceProvider = .init(), concurrentFileLimit: Int = 2) {
         self.store = store
         self.layout = layout
@@ -37,6 +41,7 @@ public actor DownloadManager {
         self.authHeaderProvider = authHeaderProvider
         self.clock = clock
         self.power = power
+        self.network = network
         self.freeSpace = freeSpace
         self.concurrentFileLimit = max(1, concurrentFileLimit)
     }
@@ -64,6 +69,7 @@ public actor DownloadManager {
         await startEventPump()
         // Stash URLs in memory only; re-supplied via registerSources after relaunch.
         sourceRegistry[job.id] = sources
+        diagnostics.record("enqueued \(sources.count) file(s) for \(repoID)@\(revision)", jobID: job.id)
         schedule()
         return job
     }
@@ -88,6 +94,7 @@ public actor DownloadManager {
             let next = DownloadReducer.reduce(current, .pause(resumeDataAvailable: false))
             apply(next, to: &job.files[index])
             if case .paused = next {
+                job.files[index].pauseReason = PauseReason.user.rawValue
                 if let (transferID, _) = runningTransfers(for: jobID, fileIndex: index).first {
                     if let data = await transport.pause(transferID) {
                         try saveResumeData(data, jobID: jobID, fileIndex: index)
@@ -98,6 +105,7 @@ public actor DownloadManager {
             }
         }
         _ = try await store.upsert(job)
+        diagnostics.record("paused by user", jobID: jobID)
     }
 
     public func resume(jobID: UUID) async throws {
@@ -108,6 +116,7 @@ public actor DownloadManager {
             let current = DownloadState(pausedPersisted: job.files[index])
             apply(DownloadReducer.reduce(current, .resume), to: &job.files[index])
             job.files[index].progress = 0
+            job.files[index].pauseReason = nil
         }
         _ = try await store.upsert(job)
         schedule()
@@ -142,6 +151,7 @@ public actor DownloadManager {
             apply(DownloadReducer.reduce(current, .enqueue), to: &job.files[index])
             job.files[index].attempts += 1
             job.files[index].failureDetail = nil
+            job.files[index].failureUserMessage = nil
             job.files[index].bytesReceived = 0
             job.files[index].hasResumeData = false
             if let part = try? layout.partialFileURL(jobID: jobID,
@@ -177,6 +187,25 @@ public actor DownloadManager {
             if changed { _ = try await store.upsert(job) }
         }
         await startEventPump()
+        // Tasks iOS kept alive across the relaunch still stream events;
+        // rebind them to their persisted job files via the task key.
+        for key in await transport.reattachedTransfers() {
+            guard let parsed = Self.parseTaskKey(key) else { continue }
+            diagnostics.record("reattached transfer after relaunch",
+                               jobID: parsed.jobID, fileIndex: parsed.fileIndex)
+        }
+    }
+
+    /// "<jobID>|<fileIndex>" ↔ tuple, for transport task keys.
+    public static func taskKey(jobID: UUID, fileIndex: Int) -> String {
+        "\(jobID.uuidString)|\(fileIndex)"
+    }
+
+    public static func parseTaskKey(_ key: String) -> (jobID: UUID, fileIndex: Int)? {
+        let parts = key.split(separator: "|")
+        guard parts.count == 2, let jobID = UUID(uuidString: String(parts[0])),
+              let fileIndex = Int(parts[1]) else { return nil }
+        return (jobID, fileIndex)
     }
 
     // MARK: - Scheduling
@@ -209,6 +238,10 @@ public actor DownloadManager {
             for job in jobs where !job.isFinished {
                 if job.policy.onlyWhileCharging && !power.isCharging() {
                     try await pauseForPolicy(jobID: job.id, reason: .unplugged)
+                    continue
+                }
+                if !job.policy.allowsCellular && !network.isUsableWiFi() {
+                    try await pauseForPolicy(jobID: job.id, reason: .networkPolicy)
                     continue
                 }
                 guard let sources = sourceRegistry[job.id] else { continue }
@@ -246,6 +279,8 @@ public actor DownloadManager {
             apply(DownloadReducer.reduce(DownloadState(pausedPersisted: file), .fail(error)), to: &file)
             fresh.files[fileIndex] = file
             _ = try await store.upsert(fresh)
+            diagnostics.record("storage preflight failed for \(source.relativePath): \(error.technicalDetail)",
+                               jobID: job.id, fileIndex: fileIndex)
             return
         }
 
@@ -265,18 +300,40 @@ public actor DownloadManager {
             request.setValue(header, forHTTPHeaderField: "Authorization")
         }
         let resumeData = file.hasResumeData ? loadResumeData(jobID: job.id, fileIndex: fileIndex) : nil
-        let transferID = try await transport.start(request: request, resumeData: resumeData, destination: partURL)
+        // HTTP Range resume is for continuing a partially-downloaded file —
+        // i.e. an attempt that already transferred bytes (bytesReceived > 0)
+        // or an explicit resume with resume data on hand. A stale part file
+        // from a failed attempt whose integrity is unknown must be replaced
+        // by a fresh full download, not appended onto.
+        let isResume = file.bytesReceived > 0 || resumeData != nil
+        let partSize = Int64((try? FileManager.default
+            .attributesOfItem(atPath: partURL.path)[.size] as? UInt64) ?? 0)
+        var effectiveResumeData = resumeData
+        if isResume && partSize > 0 {
+            request.setValue("bytes=\(partSize)-", forHTTPHeaderField: "Range")
+            effectiveResumeData = nil
+        }
+        let transferID = try await transport.start(request: request, resumeData: effectiveResumeData,
+                                                   destination: partURL,
+                                                   taskKey: Self.taskKey(jobID: job.id,
+                                                                         fileIndex: fileIndex))
         transferToFile[transferID] = (job.id, fileIndex)
         runningCount += 1
+        diagnostics.record("started \(source.relativePath)", jobID: job.id, fileIndex: fileIndex)
     }
 
     private func pauseForPolicy(jobID: UUID, reason: PauseReason) async throws {
         guard var job = try await store.job(id: jobID) else { return }
+        // Queued files stay queued so the policy auto-lifts on the next pump
+        // without a manual resume; only in-flight files are paused.
+        var pausedAny = false
         for index in job.files.indices {
             let current = DownloadState(pausedPersisted: job.files[index])
             if case .downloading = current {
                 apply(DownloadReducer.reduce(current, .pause(resumeDataAvailable: job.files[index].hasResumeData)),
                       to: &job.files[index])
+                job.files[index].pauseReason = reason.rawValue
+                pausedAny = true
                 if let (transferID, _) = runningTransfers(for: jobID, fileIndex: index).first {
                     if let data = await transport.pause(transferID) {
                         try saveResumeData(data, jobID: jobID, fileIndex: index)
@@ -286,7 +343,18 @@ public actor DownloadManager {
                 }
             }
         }
-        _ = try await store.upsert(job)
+        if pausedAny { _ = try await store.upsert(job) }
+        // Record diagnostics even when nothing was in flight: a queued-only
+        // job blocked by policy must still explain why it is waiting. The
+        // pump is event-driven, so repeat records are bounded.
+        switch reason {
+        case .unplugged:
+            diagnostics.record("paused: waiting for charger (only-while-charging policy)", jobID: jobID)
+        case .networkPolicy:
+            diagnostics.record("paused: waiting for Wi-Fi (Wi-Fi-only policy)", jobID: jobID)
+        case .user:
+            break
+        }
     }
 
     // MARK: - Event handling
@@ -325,10 +393,10 @@ public actor DownloadManager {
                 apply(DownloadReducer.reduce(current, .progress(min(1, progress))), to: &file)
                 job.files[fileIndex] = file
                 _ = try await store.upsert(job)
-            case .finished:
+            case .finished(let appending):
                 transferToFile.removeValue(forKey: transferID)
                 runningCount = max(0, runningCount - 1)
-                try await finishFile(job: &job, fileIndex: fileIndex)
+                try await finishFile(job: &job, fileIndex: fileIndex, appending: appending)
                 schedule()
             case .failed(let error, let resumeData):
                 transferToFile.removeValue(forKey: transferID)
@@ -345,7 +413,7 @@ public actor DownloadManager {
         }
     }
 
-    private func finishFile(job: inout DownloadJob, fileIndex: Int) async throws {
+    private func finishFile(job: inout DownloadJob, fileIndex: Int, appending: Bool) async throws {
         var file = job.files[fileIndex]
         let current = DownloadState(pausedPersisted: file)
         apply(DownloadReducer.reduce(current, .verify), to: &file)
@@ -354,8 +422,11 @@ public actor DownloadManager {
 
         let partURL = try layout.partialFileURL(jobID: job.id, relativePath: file.relativePath)
 
-        // Size check always runs.
+        // Size check always runs. A resumed transfer reported only the
+        // suffix bytes as progress, so reconcile bytesReceived with the
+        // on-disk size before comparing against expectedSize.
         let size = Int64((try FileManager.default.attributesOfItem(atPath: partURL.path)[.size] as? UInt64) ?? 0)
+        if appending { file.bytesReceived = size }
         if size != file.expectedSize {
             try? FileManager.default.removeItem(at: partURL)
             await failFile(job: &job, fileIndex: fileIndex,
@@ -380,6 +451,8 @@ public actor DownloadManager {
         file.bytesReceived = file.expectedSize
         job.files[fileIndex] = file
         _ = try await store.upsert(job)
+        diagnostics.record("completed \(file.relativePath) (\(file.expectedSize) bytes)",
+                           jobID: job.id, fileIndex: fileIndex)
         // Re-fetch: another file may have completed while we were verifying.
         let latest = try await store.job(id: job.id)
         if latest?.files.allSatisfy({ $0.state == .completed }) == true {
@@ -404,8 +477,11 @@ public actor DownloadManager {
         let current = DownloadState(pausedPersisted: file)
         apply(DownloadReducer.reduce(current, .fail(locallyError)), to: &file)
         file.failureDetail = locallyError.technicalDetail
+        file.failureUserMessage = locallyError.userMessage
         job.files[fileIndex] = file
         _ = try? await store.upsert(job)
+        diagnostics.record("failed \(file.relativePath): \(locallyError.technicalDetail)",
+                           jobID: job.id, fileIndex: fileIndex)
     }
 
     private func handleFailure(job: inout DownloadJob, fileIndex: Int, error: Error) async {
@@ -417,16 +493,22 @@ public actor DownloadManager {
             // Automatic retry with exponential backoff: 1s, 2s, 4s.
             apply(DownloadReducer.reduce(current, .fail(locallyError)), to: &file)
             file.failureDetail = locallyError.technicalDetail
+            file.failureUserMessage = locallyError.userMessage
             job.files[fileIndex] = file
             _ = try? await store.upsert(job)
+            diagnostics.record("retrying \(file.relativePath) after error: \(locallyError.technicalDetail)",
+                               jobID: job.id, fileIndex: fileIndex)
             let delay = pow(2.0, Double(file.attempts))
             await clock.sleep(delay)
             try? await retry(jobID: job.id)
         } else {
             apply(DownloadReducer.reduce(current, .fail(locallyError)), to: &file)
             file.failureDetail = locallyError.technicalDetail
+            file.failureUserMessage = locallyError.userMessage
             job.files[fileIndex] = file
             _ = try? await store.upsert(job)
+            diagnostics.record("failed \(file.relativePath): \(locallyError.technicalDetail)",
+                               jobID: job.id, fileIndex: fileIndex)
         }
     }
 
@@ -466,6 +548,12 @@ public actor DownloadManager {
         let url = layout.metadataURL(repoID: job.modelRepoID, revision: job.revision)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(metadata).write(to: url, options: .atomic)
+    }
+
+    /// Recent lifecycle/policy/error events for the Diagnostics screen.
+    /// Technical details only — never tokens or headers.
+    public nonisolated func recentDiagnostics(limit: Int = 50) -> [DownloadDiagnosticsEvent] {
+        diagnostics.recent(limit: limit)
     }
 
     deinit { eventTask?.cancel() }

@@ -28,6 +28,73 @@ public struct PowerStateProvider: Sendable {
     }
 }
 
+/// Injectable network-path check for download policy ("Wi-Fi only").
+/// The iOS app wires a NWPathMonitor snapshot here; the default assumes a
+/// usable connection so desktop/Linux/tests never block.
+public struct NetworkPathProvider: Sendable {
+    /// True when the current path is usable AND not a paid/limited interface
+    /// (cellular, hotspot). An unknown path (no monitor snapshot yet) must
+    /// return true — pausing on an unknown state would silently stall
+    /// downloads on devices where the monitor has not published yet.
+    public var isUsableWiFi: @Sendable () -> Bool
+
+    public init(isUsableWiFi: @escaping @Sendable () -> Bool = { true }) {
+        self.isUsableWiFi = isUsableWiFi
+    }
+}
+
+/// One entry in the download diagnostics ring buffer (Settings →
+/// Diagnostics). `detail` is a LocallyError technicalDetail or lifecycle
+/// note; it never contains tokens or request headers.
+public struct DownloadDiagnosticsEvent: Sendable, Hashable, Identifiable {
+    public let id: Int
+    public let timestamp: Date
+    public let jobID: UUID?
+    public let fileIndex: Int?
+    public let detail: String
+
+    public init(id: Int, timestamp: Date, jobID: UUID?, fileIndex: Int?, detail: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.jobID = jobID
+        self.fileIndex = fileIndex
+        self.detail = detail
+    }
+}
+
+/// Thread-safe ring buffer behind DownloadManager.recentDiagnostics.
+public final class DownloadDiagnosticsLog: @unchecked Sendable {
+    private struct State {
+        var events: [DownloadDiagnosticsEvent] = []
+        var nextID = 1
+    }
+
+    private let state = LockedState(State())
+    private let capacity: Int
+
+    public init(capacity: Int = 200) {
+        self.capacity = max(1, capacity)
+    }
+
+    public func record(_ detail: String, jobID: UUID? = nil, fileIndex: Int? = nil,
+                       at date: Date = Date()) {
+        state.withLock { s in
+            s.events.append(DownloadDiagnosticsEvent(id: s.nextID, timestamp: date,
+                                                     jobID: jobID, fileIndex: fileIndex,
+                                                     detail: detail))
+            s.nextID += 1
+            if s.events.count > capacity {
+                s.events.removeFirst(s.events.count - capacity)
+            }
+        }
+    }
+
+    /// Newest first.
+    public func recent(limit: Int) -> [DownloadDiagnosticsEvent] {
+        state.withLock { Array($0.events.suffix(limit).reversed()) }
+    }
+}
+
 /// Injectable free-space probe so tests can simulate a nearly-full disk.
 public struct FreeSpaceProvider: Sendable {
     public var freeBytes: @Sendable () -> Int64

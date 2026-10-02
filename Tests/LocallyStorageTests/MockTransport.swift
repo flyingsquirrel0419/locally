@@ -14,6 +14,7 @@ final class MockTransport: DownloadTransport, @unchecked Sendable {
         var hasResumeData: Bool
         var rangeHeader: String?
         var destination: URL
+        var taskKey: String
     }
 
     enum Behavior: Sendable {
@@ -61,23 +62,16 @@ final class MockTransport: DownloadTransport, @unchecked Sendable {
         state.withLock { $0.started }
     }
 
-    func start(request: URLRequest, resumeData: Data?, destination: URL) async throws -> TransferID {
+    func start(request: URLRequest, resumeData: Data?, destination: URL,
+               taskKey: String) async throws -> TransferID {
         let (id, record, behavior) = state.withLock { s -> (TransferID, StartedRequest, Behavior) in
             let id = s.nextID
             s.nextID += 1
-            // Mirror FoundationURLSessionTransport: resume via HTTP Range
-            // computed from the destination part-file size, so tests observe
-            // the same contract the real transport offers.
-            var range = request.value(forHTTPHeaderField: "Range")
-            if range == nil,
-               let size = (try? FileManager.default.attributesOfItem(atPath: destination.path)[.size] as? UInt64) ?? nil,
-               size > 0 {
-                range = "bytes=\(size)-"
-            }
             let record = StartedRequest(url: request.url!,
                                         hasResumeData: resumeData != nil,
-                                        rangeHeader: range,
-                                        destination: destination)
+                                        rangeHeader: request.value(forHTTPHeaderField: "Range"),
+                                        destination: destination,
+                                        taskKey: taskKey)
             s.started.append(record)
             var behavior = s.behaviors[request.url!] ?? .succeed(Data())
             if case .failThenSucceed(let data, let times, let error) = behavior {
@@ -151,8 +145,11 @@ final class MockTransport: DownloadTransport, @unchecked Sendable {
         let total = Int64(full.count)
         continuation.yield((id, .progress(bytesReceived: total / 2, totalBytes: total)))
         continuation.yield((id, .progress(bytesReceived: total, totalBytes: total)))
-        continuation.yield((id, .finished))
+        let appending = record.rangeHeader != nil || record.hasResumeData
+        continuation.yield((id, .finished(appending: appending)))
     }
+
+    func reattachedTransfers() async -> [String] { [] }
 
     func pause(_ id: TransferID) async -> Data? {
         state.withLock { $0.pausedIDs.insert(id) }

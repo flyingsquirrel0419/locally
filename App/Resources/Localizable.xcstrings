@@ -223,6 +223,24 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "진행 중이거나 완료된 다운로드가 여기에 표시됩니다." } }
       }
     },
+    "diagnostics.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Diagnostics" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "진단" } }
+      }
+    },
+    "diagnostics.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No download events yet" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드 이벤트 없음" } }
+      }
+    },
+    "diagnostics.empty.description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Download starts, pauses, and failures will appear here." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다운로드 시작, 일시 중지, 실패 기록이 여기에 표시됩니다." } }
+      }
+    },
     "settings.about" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "About" } },
