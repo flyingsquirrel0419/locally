@@ -48,6 +48,13 @@ public struct DownloadFileTask: Sendable, Hashable, Codable {
     public var progress: Double
     public var hasResumeData: Bool
     public var failureDetail: String?
+    /// User-facing failure text (LocallyError.userMessage), safe to show in
+    /// the UI; failureDetail holds the technicalDetail for diagnostics.
+    /// Absent for records written before this field existed.
+    public var failureUserMessage: String?
+    /// Why the file was paused: "user", "unplugged", or "networkPolicy"
+    /// (DownloadManager.PauseReason). Absent for older records.
+    public var pauseReason: String?
 
     public init(relativePath: String, expectedSize: Int64, sha256: String?) {
         self.relativePath = relativePath
@@ -60,6 +67,8 @@ public struct DownloadFileTask: Sendable, Hashable, Codable {
         self.progress = 0
         self.hasResumeData = false
         self.failureDetail = nil
+        self.failureUserMessage = nil
+        self.pauseReason = nil
     }
 }
 

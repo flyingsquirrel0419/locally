@@ -1,11 +1,15 @@
 import Foundation
 import LocallyCore
 
-/// A relative, internal 0–1000 score summarizing this device's suitability
+/// A relative, internal 0–<1000 score summarizing this device's suitability
 /// for local AI workloads. It is NOT a scientific cross-device benchmark:
 /// it is normalized against a documented reference baseline
 /// (see DECISIONS.md) and intended only to compare configurations of the
-/// same benchmark version.
+/// same benchmark version. The scale is deliberately non-saturating:
+/// 1000 × raw/(raw+1), so the reference device (raw == 1) lands at 500 and
+/// the score approaches — never reaches — 1000 as raw grows. The previous
+/// linear 0–1000 scale clamped at 1000, so every device since the
+/// A14-class reference saturated at exactly 1000.
 public struct AIPerformanceIndex: Codable, Sendable, Hashable {
     /// Reference baseline: roughly an A14-class device.
     public static let referenceCPUGFLOPS: Double = 10.0
@@ -56,9 +60,13 @@ public struct AIPerformanceIndex: Codable, Sendable, Hashable {
         } else {
             raw = (cpu * 0.55 + mem * 0.45) * memoryBonus
         }
-        let score = Int((raw * 1000.0).rounded())
+        // Non-saturating map: raw == 1 (reference) → 500, 3× → 750,
+        // 10× → 909; 1000 is an unreachable asymptote for finite input, so
+        // newer devices always outscore the reference instead of pinning at
+        // a 1000 ceiling.
+        let score = Int((1000.0 * raw / (raw + 1)).rounded())
         return AIPerformanceIndex(
-            score: max(0, min(1000, score)),
+            score: max(0, min(999, score)),
             cpuComponent: cpu,
             memoryComponent: mem,
             metalComponent: metal,

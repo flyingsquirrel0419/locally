@@ -9,7 +9,7 @@ import LocallyCore
 /// Uses a delegate-based download task so it works with
 /// swift-corelibs-foundation, which lacks `URLSession.bytes(for:)`.
 /// Resume falls back to HTTP Range from the part-file size (the manager
-/// passes the existing part file as `destination`).
+/// passes the existing part file as `destination` and sets the Range header).
 public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
         URLSessionDownloadDelegate, @unchecked Sendable {
     public typealias TransferID = Int
@@ -21,6 +21,9 @@ public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
         var nextID: TransferID = 1
         var tasks: [TransferID: URLSessionDownloadTask] = [:]
         var destinations: [TransferID: URL] = [:]
+        /// True when the request resumed via Range/resume data: completion
+        /// appends the suffix to the part file instead of replacing it.
+        var appending: [TransferID: Bool] = [:]
     }
     private let state = LockedState(State())
 
@@ -36,32 +39,32 @@ public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
 
     public var events: AsyncStream<(TransferID, DownloadTransportEvent)> { eventStream }
 
-    public func start(request: URLRequest, resumeData: Data?, destination: URL) async throws -> TransferID {
+    public func start(request: URLRequest, resumeData: Data?, destination: URL,
+                      taskKey: String) async throws -> TransferID {
         // resumeData is a URLSession-background concept; this transport resumes
-        // via HTTP Range from the part-file size, so resumeData is ignored here.
+        // via HTTP Range (the manager already set the header from the part-file
+        // size), so resumeData is ignored here. A default session's tasks die
+        // with the process, so reattach/task-key bookkeeping is a no-op.
         let fm = FileManager.default
         try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        var offset: Int64 = 0
-        if fm.fileExists(atPath: destination.path) {
-            offset = Int64((try fm.attributesOfItem(atPath: destination.path)[.size] as? UInt64) ?? 0)
-        }
-        var req = request
-        if offset > 0 {
-            req.setValue("bytes=\(offset)-", forHTTPHeaderField: "Range")
-        }
+        let resuming = request.value(forHTTPHeaderField: "Range") != nil
 
         let id = state.withLock { s in
             let id = s.nextID
             s.nextID += 1
             s.destinations[id] = destination
+            s.appending[id] = resuming
             return id
         }
 
-        let task = session.downloadTask(with: req)
+        let task = session.downloadTask(with: request)
+        task.taskDescription = taskKey
         state.withLock { $0.tasks[id] = task }
         task.resume()
         return id
     }
+
+    public func reattachedTransfers() async -> [String] { [] }
 
     /// Pause is cooperative: we cannot extract resumeData without the
     /// background-session API, so we cancel and return nil; the manager falls
@@ -74,6 +77,7 @@ public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
     public func cancel(_ id: TransferID) async {
         let task = state.withLock { s -> URLSessionDownloadTask? in
             s.destinations.removeValue(forKey: id)
+            s.appending.removeValue(forKey: id)
             return s.tasks.removeValue(forKey: id)
         }
         task?.cancel()
@@ -92,22 +96,25 @@ public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                            didFinishDownloadingTo location: URL) {
         guard let id = idFor(downloadTask) else { return }
-        let destination = state.withLock { $0.destinations[id] }
+        let (destination, appending) = state.withLock { s -> (URL?, Bool) in
+            (s.destinations[id], s.appending[id] ?? false)
+        }
         if let http = downloadTask.response as? HTTPURLResponse, http.statusCode >= 400 {
             eventContinuation.yield((id, .failed(error: HTTPStatusError(statusCode: http.statusCode),
                                                  resumeData: nil)))
             return
         }
         guard let destination else {
-            eventContinuation.yield((id, .finished))
+            eventContinuation.yield((id, .finished(appending: appending)))
             return
         }
         do {
             let fm = FileManager.default
             try fm.createDirectory(at: destination.deletingLastPathComponent(),
                                    withIntermediateDirectories: true)
-            // If a partial prefix exists, append the new bytes; otherwise move.
-            if fm.fileExists(atPath: destination.path),
+            // A resuming request (Range header) received only the suffix:
+            // append it to the part file's prefix. A full 200 replaces.
+            if appending, fm.fileExists(atPath: destination.path),
                ((try fm.attributesOfItem(atPath: destination.path)[.size] as? UInt64) ?? 0) > 0 {
                 let readHandle = try FileHandle(forReadingFrom: location)
                 let writeHandle = try FileHandle(forWritingTo: destination)
@@ -123,7 +130,7 @@ public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
                 if fm.fileExists(atPath: destination.path) { try fm.removeItem(at: destination) }
                 try fm.moveItem(at: location, to: destination)
             }
-            eventContinuation.yield((id, .finished))
+            eventContinuation.yield((id, .finished(appending: appending)))
         } catch {
             eventContinuation.yield((id, .failed(error: error, resumeData: nil)))
         }
@@ -146,6 +153,7 @@ public final class FoundationURLSessionTransport: NSObject, DownloadTransport,
         state.withLock { s in
             s.tasks.removeValue(forKey: id)
             s.destinations.removeValue(forKey: id)
+            s.appending.removeValue(forKey: id)
         }
         if let error {
             #if os(Linux)

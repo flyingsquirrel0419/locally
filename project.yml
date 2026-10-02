@@ -97,6 +97,8 @@ targets:
       product: LocallyCore
     - package: Locally
       product: LocallyHF
+    - package: Locally
+      product: LocallyStorage
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.tests
