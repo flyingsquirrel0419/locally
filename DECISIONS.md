@@ -808,3 +808,34 @@ live HF API and the huggingface.co/resolve → cas-bridge/cdn-lfs redirect
 chain. An earlier revision of the tests that substituted
 `FoundationURLSessionTransport` on iOS was reverted — it would not have
 caught the device bug, which lives in the background-session path.
+
+## 2026-10-02 — Intentional stops are tombstoned before any await
+
+The v0.1.1 "pause and delete buttons do nothing" report traced to two
+reentrancy gaps between DownloadManager and a real URLSession (the mock
+never emitted them, so the old suite was green):
+
+1. **Pause restarted the download.** `cancel(byProducingResumeData:)`
+   delivers didCompleteWithError(NSURLErrorCancelled) *after* it returns.
+   The manager still had the transfer in `transferToFile`, so the
+   cancellation callback was handled as a retryable network failure and
+   the backoff loop restarted the transfer. The manager now removes the
+   mapping and marks the transfer intentionally-stopped BEFORE awaiting
+   `transport.pause`/`transport.cancel`; the event pump consumes terminal
+   events for marked transfers without touching state, and the background
+   transport drops its own task maps once resume data is produced so the
+   delegate callback cannot be re-attributed.
+2. **Cancelled jobs reappeared.** `cancel` removed the job from the store
+   only after several awaits; an event handler whose store read had queued
+   mid-cancel then upserted the job back. Cancel now tombstones the job id
+   in memory first; every store read/upsert path (event handler, queue
+   pump, startFile, pause/resume/retry, registerSources) checks the
+   tombstone, and cancel never re-upserts — it stops transfers, deletes
+   partials, removes.
+
+A cancellation the manager did NOT initiate (system-suspended background
+task) is no longer a failure either: it pauses the file and keeps resume
+data instead of entering the retry path. MockTransport now models real
+URLSession cancellation semantics (asynchronous NSURLErrorCancelled plus
+a trailing progress event after pause/cancel), and the regression tests
+fail against the pre-fix manager.

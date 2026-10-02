@@ -214,12 +214,20 @@ public final class URLSessionBackgroundTransport: NSObject, DownloadTransport,
     }
 
     public func pause(_ id: TransferID) async -> Data? {
-        await withCheckedContinuation { continuation in
-            let task = state.withLock { $0.tasksByID[id] }
-            guard let task else {
-                continuation.resume(returning: nil)
-                return
-            }
+        // cancel(byProducingResumeData:) still delivers didCompleteWithError
+        // (NSURLErrorCancelled, resume data in userInfo) after this returns.
+        // Drop our bookkeeping now: the manager marked the transfer as
+        // intentionally stopped before awaiting us, and idFor() must no
+        // longer resolve the task so the delegate callback cannot be
+        // re-attributed as a failure.
+        let task = state.withLock { state -> URLSessionDownloadTask? in
+            state.destinations.removeValue(forKey: id)
+            state.taskKeys.removeValue(forKey: id)
+            state.appending.removeValue(forKey: id)
+            return state.tasksByID.removeValue(forKey: id)
+        }
+        guard let task else { return nil }
+        return await withCheckedContinuation { continuation in
             task.cancel(byProducingResumeData: { data in
                 continuation.resume(returning: data)
             })

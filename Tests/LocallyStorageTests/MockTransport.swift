@@ -38,6 +38,7 @@ final class MockTransport: DownloadTransport, @unchecked Sendable {
         var behaviors: [URL: Behavior] = [:]
         var started: [StartedRequest] = []
         var pausedIDs: Set<TransferID> = []
+        var cancelledIDs: Set<TransferID> = []
         var startCounts: [URL: Int] = [:]
     }
 
@@ -151,14 +152,57 @@ final class MockTransport: DownloadTransport, @unchecked Sendable {
 
     func reattachedTransfers() async -> [String] { [] }
 
+    /// Models URLSession's cancel(byProducingResumeData:): the resume-data
+    /// callback fires first, then the task still delivers
+    /// didCompleteWithError(NSURLErrorCancelled) — and sometimes a trailing
+    /// didWriteData — asynchronously. A manager that forgets the transfer
+    /// was intentionally stopped will treat that callback as a retryable
+    /// network failure (the on-device "pause restarts the download" bug).
     func pause(_ id: TransferID) async -> Data? {
         state.withLock { $0.pausedIDs.insert(id) }
+        let continuation = self.continuation
+        Task {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+            let cancelled = NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
+            continuation.yield((id, .progress(bytesReceived: 1, totalBytes: nil)))
+            continuation.yield((id, .failed(error: cancelled, resumeData: nil)))
+        }
         return Data("mock-resume".utf8)
     }
 
-    func cancel(_ id: TransferID) async {}
+    /// Models task.cancel(): didCompleteWithError(NSURLErrorCancelled) is
+    /// still delivered asynchronously after cancel returns.
+    func cancel(_ id: TransferID) async {
+        state.withLock { $0.cancelledIDs.insert(id) }
+        let continuation = self.continuation
+        Task {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+            let cancelled = NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
+            continuation.yield((id, .failed(error: cancelled, resumeData: nil)))
+        }
+    }
 
     func wasPaused(_ id: TransferID) -> Bool {
         state.withLock { $0.pausedIDs.contains(id) }
+    }
+
+    func wasCancelled(_ id: TransferID) -> Bool {
+        state.withLock { $0.cancelledIDs.contains(id) }
+    }
+
+    /// Deliver a progress event for the most recently started transfer,
+    /// out-of-band — as if the task was mid-stream when the test acts.
+    func injectProgressForStarted(bytesReceived: Int64, totalBytes: Int64?) {
+        let id = state.withLock { $0.nextID - 1 }
+        continuation.yield((id, .progress(bytesReceived: bytesReceived, totalBytes: totalBytes)))
+    }
+
+    /// Deliver a cancellation failure for the most recently started transfer
+    /// without the manager asking — a system-initiated task cancellation
+    /// (background suspension, session invalidation).
+    func injectCancellationForStarted() {
+        let id = state.withLock { $0.nextID - 1 }
+        let cancelled = NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
+        continuation.yield((id, .failed(error: cancelled, resumeData: nil)))
     }
 }

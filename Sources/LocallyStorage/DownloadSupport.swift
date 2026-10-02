@@ -195,4 +195,14 @@ extension DownloadManager {
         let nsError = error as NSError
         return nsError.domain == NSURLErrorDomain
     }
+
+    /// A cancelled URLSession task is not a failure: the manager pauses the
+    /// file and keeps any resume data instead of retrying. This covers both
+    /// manager-initiated stops (guarded separately) and system-initiated
+    /// cancellations (background task suspended, session invalidated).
+    static func isCancellation(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled { return true }
+        return error is CancellationError
+    }
 }
