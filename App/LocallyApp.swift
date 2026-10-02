@@ -7,6 +7,14 @@ struct LocallyApp: App {
     @UIApplicationDelegateAdaptor(LocallyAppDelegate.self) private var appDelegate
 
     init() {
+        // UI-test screenshot fixtures (DEBUG + -UITestFixtures only): stage
+        // fixture model files and an in-flight download job BEFORE the
+        // download store loads, then register the models after the library
+        // starts. Inert in every other configuration.
+        #if DEBUG
+        UITestFixtures.configureScreenshotDirectory()
+        UITestFixtures.prepareDiskStateIfNeeded()
+        #endif
         // Start the shared download runtime at launch; the HF token provider
         // reads Keychain at request time so tokens never touch storage.
         DownloadRuntime.shared.start(authHeaderProvider: { url in
@@ -19,6 +27,9 @@ struct LocallyApp: App {
             #endif
         })
         ModelLibraryRuntime.shared.start()
+        #if DEBUG
+        UITestFixtures().seedIfNeeded()
+        #endif
         // Runtime registry + cross-tab navigation for the playground.
         AppRuntime.shared.start()
         // App-wide resource policy: memory warnings, thermal, low-power.

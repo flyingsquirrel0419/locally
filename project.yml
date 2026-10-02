@@ -85,6 +85,19 @@ targets:
         TARGETED_DEVICE_FAMILY: '1'
         ENABLE_USER_SCRIPT_SANDBOXING: true
         SWIFT_STRICT_CONCURRENCY: complete
+  LocallyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+    - path: Tests/UITests
+    dependencies:
+    - target: Locally
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.teamwicked.locally.uitests
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
   LocallyTests:
     type: bundle.unit-test
     platform: iOS
@@ -201,6 +214,8 @@ schemes:
         Locally: all
         LocallyTests:
         - test
+        LocallyUITests:
+        - test
         LocallyCoreTests:
         - test
         LocallyDeviceTests:
@@ -225,3 +240,15 @@ schemes:
       - LocallyCompatibilityTests
       - LocallyStorageTests
       - LocallyRuntimeTests
+  LocallyScreenshots:
+    build:
+      targets:
+        Locally: all
+        LocallyUITests:
+        - test
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+      - LocallyUITests
