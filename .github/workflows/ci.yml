@@ -13,7 +13,11 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    container: swift:6.1
+    container:
+      image: swift:6.1
+      # gdb hang forensics in ci-test-linux.sh need ptrace; the default
+      # container config (no CAP_SYS_PTRACE, default seccomp) blocks it.
+      options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools

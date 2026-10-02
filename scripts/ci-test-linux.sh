@@ -36,14 +36,33 @@ if kill -0 "$runner_pid" 2>/dev/null; then
     echo "Process tree:"
     ps -ef --forest | grep -E "swift|xctest" | grep -v grep || true
     echo
+    dump_backtrace() {
+      local pid="$1"
+      local out
+      out=$(gdb -p "$pid" -batch -ex "thread apply all bt" 2>&1)
+      echo "$out"
+      if echo "$out" | grep -q "Operation not permitted"; then
+        echo
+        echo "gdb blocked by ptrace policy; falling back to /proc:"
+        echo "-- /proc/$pid/status --"
+        grep -E "^(Name|State|Threads|VmRSS)" "/proc/$pid/status" 2>/dev/null || true
+        for task in /proc/"$pid"/task/*; do
+          tid=${task##*/}
+          wchan=$(cat "$task/wchan" 2>/dev/null || echo "?")
+          comm=$(cat "$task/comm" 2>/dev/null || echo "?")
+          echo "tid $tid ($comm) wchan=$wchan"
+          sed 's/^/    /' "$task/stack" 2>/dev/null || true
+        done
+      fi
+    }
     test_pid=$(pgrep -f "LocallyPackageTests.xctest" | head -1)
     if [ -n "$test_pid" ]; then
       echo "Full thread backtrace of test process (pid $test_pid):"
-      gdb -p "$test_pid" -batch -ex "thread apply all bt" 2>&1 || true
+      dump_backtrace "$test_pid" || true
     else
       echo "No LocallyPackageTests.xctest process found; dumping swift test driver:"
       driver_pid=$(pgrep -f "swift test" | head -1)
-      [ -n "$driver_pid" ] && gdb -p "$driver_pid" -batch -ex "thread apply all bt" 2>&1 || true
+      [ -n "$driver_pid" ] && dump_backtrace "$driver_pid" || true
     fi
     echo '```'
   } | tee /dev/stderr >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
