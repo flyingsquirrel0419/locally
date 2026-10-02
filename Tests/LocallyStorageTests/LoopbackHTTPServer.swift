@@ -38,7 +38,7 @@ final class LoopbackHTTPServer: @unchecked Sendable {
     private var plans: [String: Plan] = [:]
     private var recorded: [RecordedRequest] = []
     private var listenerFD: Int32 = -1
-    private var acceptTask: Task<Void, Never>?
+    private var acceptThread: Thread?
     private var stopped = false
 
     let port: UInt16
@@ -91,21 +91,74 @@ final class LoopbackHTTPServer: @unchecked Sendable {
         return recorded
     }
 
+    /// Starts the accept loop on a DEDICATED thread — never on the Swift
+    /// Concurrency cooperative pool. A blocking accept() pinned to a
+    /// cooperative thread starves the pool (its size ~ CPU count) and can
+    /// deadlock later async tests; see run 36958123074 hang forensics.
+    /// Idempotent: a second call while running is a no-op.
     func start() {
-        acceptTask = Task.detached { [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                let fd = accept(self.listenerFD, nil, nil)
-                if fd < 0 { break }
-                Task.detached { self.handle(connection: fd) }
+        lock.lock()
+        if acceptThread != nil { lock.unlock(); return }
+        stopped = false
+        let thread = Thread { [weak self] in
+            self?.acceptLoop()
+        }
+        thread.name = "LoopbackHTTPServer.accept"
+        acceptThread = thread
+        lock.unlock()
+        thread.start()
+    }
+
+    private func acceptLoop() {
+        while true {
+            lock.lock()
+            let fd = listenerFD
+            let isStopped = stopped
+            lock.unlock()
+            if isStopped || fd < 0 { return }
+            let conn = accept(fd, nil, nil)
+            if conn < 0 {
+                // EBADF/EINVAL after stop() shuts the listener down.
+                lock.lock(); let done = stopped; lock.unlock()
+                if done { return }
+                // Transient error (e.g. EINTR/ECONNABORTED): keep accepting.
+                continue
             }
+            // Handle inline on this thread: the server is
+            // one-connection-at-a-time by design, and spawning connection
+            // work onto the cooperative pool is exactly what we must avoid.
+            handle(connection: conn)
         }
     }
 
+    /// Stops the accept loop and joins its thread (bounded wait). On Linux,
+    /// close() alone does NOT wake a thread blocked in accept() — only
+    /// shutdown(fd, SHUT_RDWR) does — so we shutdown first, then close.
     func stop() {
-        lock.lock(); stopped = true; lock.unlock()
-        acceptTask?.cancel()
-        if listenerFD >= 0 { close(listenerFD); listenerFD = -1 }
+        lock.lock()
+        stopped = true
+        let fd = listenerFD
+        listenerFD = -1
+        let thread = acceptThread
+        lock.unlock()
+        if fd >= 0 {
+            // Glibc exposes SHUT_RDWR as Int; Darwin as Int32.
+            shutdown(fd, Int32(SHUT_RDWR))
+            close(fd)
+        }
+        // Bounded join: wait for the accept thread to exit (it returns as
+        // soon as accept() unblocks with EBADF/EINVAL), at most 5 s.
+        if let thread {
+            let deadline = Date().addingTimeInterval(5)
+            while !thread.isFinished && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+        }
+        lock.lock(); acceptThread = nil; lock.unlock()
+    }
+
+    deinit {
+        stop()
     }
 
     struct ErrnoError: Error { var what: String; init(_ w: String) { what = w } }
