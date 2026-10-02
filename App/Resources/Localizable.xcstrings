@@ -39,8 +39,8 @@
     },
     "home.score.disclaimer" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Relative internal score (0–1000), not a scientific benchmark." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "상대적인 내부 점수(0–1000)이며 과학적 벤치마크가 아닙니다." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Relative internal score (approaches 1000; the reference device scores 500), not a scientific benchmark." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "상대적인 내부 점수(최대 1000에 근접하며 기준 기기는 500점)이고 과학적 벤치마크가 아닙니다." } }
       }
     },
     "home.benchmark.run" : {

@@ -79,7 +79,8 @@ struct MetricRow: View {
     }
 }
 
-/// Circular gauge for the 0–1000 AI performance index.
+/// Circular gauge for the AI performance index (asymptotic toward 1000;
+/// the reference device scores 500).
 struct ScoreGauge: View {
     let score: Int?
     var max: Int = 1000

@@ -1,5 +1,18 @@
 # Decisions
 
+## 2026-10-02 — AIPerformanceIndex uses a non-saturating curve
+
+The original linear map (`score = raw × 1000`, clamped to 1000) made every
+iPhone since the A14-class reference saturate at exactly 1000: the CPU
+component alone of a recent device exceeds raw == 1, so the clamp erased
+all differences between device generations. The scale keeps the same
+reference constants and weights but maps the weighted raw ratio (raw == 1
+at the reference device) through `score = 1000 × raw/(raw+1)`: reference →
+500, 3× → 750, 10× → 909. 1000 is an asymptote no finite measurement
+reaches, so newer hardware always outscores the reference. Scores from
+before this change are not comparable with scores after it; the index is
+never persisted, so nothing is migrated.
+
 ## 2026-10-01 — Safe AI memory budget heuristic
 
 An iOS app realistically keeps ~50–65% of physical RAM as usable working
@@ -14,7 +27,8 @@ a false "incompatible" rating, an overestimated one produces a crash.
 
 ## 2026-10-01 — AIPerformanceIndex is relative, not scientific
 
-The 0–1000 score normalizes measured CPU Float32 matmul GFLOPS (192³,
+The 0–<1000 score (superseded by the non-saturating curve of 2026-10-02)
+normalizes measured CPU Float32 matmul GFLOPS (192³,
 i-k-j loop order), memcpy-style bandwidth (64 MB buffers), and Metal FMA
 throughput against an arbitrary reference baseline approximating an
 A14-class device (10 CPU GFLOPS, 30 GB/s memory, 500 Metal GFLOPS).

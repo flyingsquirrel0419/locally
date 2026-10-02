@@ -47,26 +47,29 @@ final class MemoryBudgetTests: XCTestCase {
 }
 
 final class AIPerformanceIndexTests: XCTestCase {
-    func testReferenceDeviceScores1000() {
+    func testReferenceDeviceScoresAbout500() {
         let benchmark = BenchmarkResult(
             cpuGflops: AIPerformanceIndex.referenceCPUGFLOPS,
             memoryCopyGBps: AIPerformanceIndex.referenceMemoryGBps,
             metalGflops: AIPerformanceIndex.referenceMetalGFLOPS,
             duration: 3
         )
-        // 8GB reference memory gives bonus exactly 1.0 (log2(9)/log2(9)).
+        // 8GB reference memory gives bonus exactly 1.0 (log2(9)/log2(9)),
+        // so raw == 1.0 and the curve maps the reference to 500.
         let index = AIPerformanceIndex.compute(benchmark: benchmark,
                                                physicalMemory: 8_000_000_000)
         XCTAssertNotNil(index)
-        XCTAssertEqual(index!.score, 1000)
+        XCTAssertEqual(index!.score, 500)
     }
 
-    func testScoreIsClampedTo0_1000() {
+    func testScoreNeverReaches1000ForFiniteInput() {
         let huge = BenchmarkResult(cpuGflops: 10_000, memoryCopyGBps: 5_000,
                                    metalGflops: 1_000_000, duration: 1)
         let index = AIPerformanceIndex.compute(benchmark: huge,
                                                physicalMemory: 128_000_000_000)
-        XCTAssertEqual(index?.score, 1000)
+        XCTAssertNotNil(index)
+        XCTAssertLessThan(index!.score, 1000)
+        XCTAssertGreaterThan(index!.score, 500)
 
         let tiny = BenchmarkResult(cpuGflops: 0.001, memoryCopyGBps: 0.001,
                                    metalGflops: 0.001, duration: 1)
@@ -74,7 +77,28 @@ final class AIPerformanceIndexTests: XCTestCase {
                                                     physicalMemory: 512_000_000)
         XCTAssertNotNil(smallIndex)
         XCTAssertGreaterThanOrEqual(smallIndex!.score, 0)
-        XCTAssertLessThanOrEqual(smallIndex!.score, 1000)
+        XCTAssertLessThan(smallIndex!.score, 1000)
+    }
+
+    func testScoreIsMonotonicAndDistinguishesDeviceGenerations() {
+        // 2×/4×/8× the reference on every metric must yield strictly
+        // increasing, distinct scores — the bug this fixes had all three
+        // pinned at 1000.
+        func index(multiple: Double) -> AIPerformanceIndex {
+            let benchmark = BenchmarkResult(
+                cpuGflops: AIPerformanceIndex.referenceCPUGFLOPS * multiple,
+                memoryCopyGBps: AIPerformanceIndex.referenceMemoryGBps * multiple,
+                metalGflops: AIPerformanceIndex.referenceMetalGFLOPS * multiple,
+                duration: 1)
+            return AIPerformanceIndex.compute(benchmark: benchmark,
+                                              physicalMemory: 8_000_000_000)!
+        }
+        let two = index(multiple: 2)
+        let four = index(multiple: 4)
+        let eight = index(multiple: 8)
+        XCTAssertLessThan(two.score, four.score)
+        XCTAssertLessThan(four.score, eight.score)
+        XCTAssertLessThan(eight.score, 1000)
     }
 
     func testNilWhenNothingMeasured() {
@@ -88,7 +112,7 @@ final class AIPerformanceIndexTests: XCTestCase {
                                                physicalMemory: 8_000_000_000)
         XCTAssertNotNil(index)
         XCTAssertNil(index!.metalComponent)
-        XCTAssertEqual(index!.score, 1000)
+        XCTAssertEqual(index!.score, 500)
     }
 }
 
