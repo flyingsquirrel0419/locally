@@ -26,6 +26,7 @@ concurrency:
 jobs:
   ipa:
     runs-on: macos-15
+    timeout-minutes: 60
     env:
       TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:

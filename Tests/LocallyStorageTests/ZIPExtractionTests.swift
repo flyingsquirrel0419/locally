@@ -1,6 +1,9 @@
 import XCTest
 @testable import LocallyStorage
 import LocallyCore
+#if canImport(CZlib)
+import CZlib
+#endif
 
 /// ZIP extraction safety: fixtures were generated with python3's zipfile
 /// (see Tests/Fixtures/Archives) including hostile variants.
@@ -130,6 +133,63 @@ final class ZIPExtractionTests: XCTestCase {
     }
 
     // MARK: - Limits
+
+    /// Pathological chunk sizes must terminate: inflate output is drained
+    /// through the same code path regardless of how the input is split, so
+    /// an entry whose compressed stream ends mid-chunk (1-byte tail, empty
+    /// flush chunks) must finish, not spin. Regression guard for the CI
+    /// hang where a ZIPExtractionTests case never returned (run 36949847217).
+    /// zlib-only: the Apple Compression backend is exercised by the fixture
+    /// tests on macOS/iOS.
+    #if canImport(CZlib)
+    func testInflatePathologicalChunkingTerminates() throws {
+        let payload = Data((0..<10_000).map { UInt8($0 % 251) })
+        var zstream = z_stream()
+        XCTAssertEqual(deflateInit2_(&zstream, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                                     -MAX_WBITS, 8, Z_DEFAULT_STRATEGY,
+                                     ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)), Z_OK)
+        defer { deflateEnd(&zstream) }
+        var compressed = Data()
+        try payload.withUnsafeBytes { src in
+            zstream.next_in = UnsafeMutablePointer(mutating: src.baseAddress!
+                .assumingMemoryBound(to: UInt8.self))
+            zstream.avail_in = UInt32(payload.count)
+            var out = [UInt8](repeating: 0, count: 4096)
+            while true {
+                let status = out.withUnsafeMutableBytes { dst -> Int32 in
+                    zstream.next_out = dst.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                    zstream.avail_out = UInt32(dst.count)
+                    return CZlib.deflate(&zstream, Z_FINISH)
+                }
+                compressed.append(contentsOf: out[0..<(out.count - Int(zstream.avail_out))])
+                if status == Z_STREAM_END { break }
+                XCTAssertEqual(status, Z_OK)
+            }
+        }
+
+        // Split the compressed stream into pathological chunkings; each must
+        // reassemble the payload exactly and terminate.
+        let chunkings: [[Int]] = [
+            [compressed.count],                     // one shot
+            Array(repeating: 1, count: compressed.count),  // 1-byte chunks
+            [compressed.count / 2, 0, compressed.count - compressed.count / 2],  // empty middle
+            [compressed.count - 1, 1],              // 1-byte tail
+        ]
+        for sizes in chunkings {
+            let inflater = try Inflater()
+            var offset = 0
+            var output = Data()
+            for (index, size) in sizes.enumerated() {
+                let end = min(offset + size, compressed.count)
+                let chunk = compressed.subdata(in: offset..<end)
+                offset = end
+                output.append(try inflater.inflate(chunk, isLast: index == sizes.count - 1,
+                                                   path: "chunked"))
+            }
+            XCTAssertEqual(output, payload, "chunking \(sizes.prefix(4))… diverged")
+        }
+    }
+    #endif
 
     func testEntryCountLimitEnforced() throws {
         let archive = try fixture("good.zip")
