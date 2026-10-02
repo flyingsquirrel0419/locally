@@ -1,6 +1,7 @@
 import SwiftUI
 import LocallyStorage
 import UIKit
+import CoreTransferable
 
 /// Settings → Diagnostics: recent download lifecycle events and failures
 /// from DownloadManager's ring buffer. Details are LocallyError
