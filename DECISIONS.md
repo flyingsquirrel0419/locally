@@ -808,3 +808,41 @@ live HF API and the huggingface.co/resolve → cas-bridge/cdn-lfs redirect
 chain. An earlier revision of the tests that substituted
 `FoundationURLSessionTransport` on iOS was reverted — it would not have
 caught the device bug, which lives in the background-session path.
+
+## Screenshot pipeline: UI tests + hosted previews (worker w-screenshots, 2026-10-02)
+
+Goal: the lead needs to SEE the app. Two complementary capture paths:
+
+1. `Tests/UITests/ScreenshotTests.swift` — a real XCUITest target
+   (`LocallyUITests`) that launches the app with `-UITestFixtures` and
+   navigates every tab via accessibility labels, capturing
+   `XCUIScreen.main.screenshot()` both as `.keepAlways` XCTAttachments and
+   as PNG files written to `$SCREENSHOT_DIR` (injected via
+   `launchEnvironment`). Dark mode is a separate pass driven by
+   `xcrun simctl ui <udid> appearance dark`; the XXXL Dynamic Type pass
+   sets `-UIPreferredContentSizeCategoryName` from the runner's
+   `CONTENT_SIZE_CATEGORY` env.
+
+2. `Tests/AppTests/ScreenshotPreviewTests.swift` — hosted unit tests in the
+   existing `LocallyTests` bundle that render the app's internal SwiftUI
+   views directly (`UIHostingController` + off-screen `UIWindow`) and
+   screenshot them. The UI-test target cannot see internal app types; the
+   hosted bundle can (`@testable import Locally`). This gives per-screen
+   renders of views that are hard to drive via UI automation (Model Detail,
+   Diagnostics) without adding public surface area to the app.
+
+Fixture state: `App/Infrastructure/UITestFixtures.swift` (DEBUG-only,
+gated on the `-UITestFixtures` launch argument). `prepareDiskStateIfNeeded()`
+runs BEFORE `DownloadRuntime.start()` and writes fixture model payload files
+plus a mid-transfer `jobs.json` into Application Support, so `restore()`
+loads an honest in-flight download. `seedIfNeeded()` runs after
+`ModelLibraryRuntime.start()` and registers the models through the real
+`ModelRegistry` so size accounting and metadata use production code. One
+fixture model carries a syntactically valid minimal GGUF (layout adapted
+from `GGUFParserTests`) so the Playground can attempt a real llama.cpp
+load on the simulator; whether generation succeeds or fails, the rendered
+state is honest.
+
+The `LocallyScreenshots` scheme keeps the screenshot target out of the
+default `Locally` test plan, so CI's main test job does not pay for UI-test
+boot time.

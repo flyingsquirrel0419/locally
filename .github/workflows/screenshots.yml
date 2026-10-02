@@ -1,0 +1,176 @@
+name: Screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Cache llama.cpp Apple build
+        uses: actions/cache@v4
+        with:
+          path: .deps/llama-apple
+          key: llama-apple-v0.5.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Build llama.cpp Apple xcframework (iOS device + simulator)
+        run: scripts/build-llama-apple.sh
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Pick simulator
+        run: |
+          xcrun simctl list devices available -j > sims.json
+          UDID=$(python3 -c "
+          import json
+          d=json.load(open('sims.json'))
+          pref=['iPhone 16 Pro','iPhone 16','iPhone 15']
+          devs=[(v['name'],v['udid']) for r,ds in d['devices'].items() if 'iOS' in r for v in ds if v['isAvailable'] and v['name'].startswith('iPhone')]
+          devs.sort(reverse=True)
+          for p in pref:
+              for n,u in devs:
+                  if n==p: print(u); raise SystemExit
+          print(devs[0][1])
+          ")
+          echo "udid=$UDID" >> "$GITHUB_ENV"
+          echo "Using simulator UDID: $UDID"
+      - name: Run UI screenshot tests (light mode)
+        run: |
+          set -o pipefail
+          mkdir -p shots/light
+          SCREENSHOT_DIR="$PWD/shots/light" xcodebuild test \
+            -project Locally.xcodeproj \
+            -scheme LocallyScreenshots \
+            -destination "id=$udid" \
+            -resultBundlePath ShotsLight.xcresult \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -quiet 2>&1 | tee shots-light.log
+      - name: Run hosted preview screenshots (light mode)
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Locally.xcodeproj \
+            -scheme Locally \
+            -destination "id=$udid" \
+            -only-testing:LocallyTests/ScreenshotPreviewTests \
+            -resultBundlePath PreviewLight.xcresult \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -quiet 2>&1 | tee preview-light.log || true
+      - name: Run UI screenshot tests (dark mode)
+        run: |
+          set -o pipefail
+          mkdir -p shots/dark
+          xcrun simctl boot "$udid" 2>/dev/null || true
+          xcrun simctl ui "$udid" appearance dark
+          SCREENSHOT_DIR="$PWD/shots/dark" xcodebuild test \
+            -project Locally.xcodeproj \
+            -scheme LocallyScreenshots \
+            -destination "id=$udid" \
+            -resultBundlePath ShotsDark.xcresult \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -quiet 2>&1 | tee shots-dark.log
+      - name: Run hosted preview screenshots (dark mode)
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Locally.xcodeproj \
+            -scheme Locally \
+            -destination "id=$udid" \
+            -only-testing:LocallyTests/ScreenshotPreviewTests \
+            -resultBundlePath PreviewDark.xcresult \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -quiet 2>&1 | tee preview-dark.log || true
+      - name: Run Home/Models at accessibility XXXL (light)
+        run: |
+          set -o pipefail
+          mkdir -p shots/xxxl
+          xcrun simctl ui "$udid" appearance light
+          SCREENSHOT_DIR="$PWD/shots/xxxl" \
+          CONTENT_SIZE_CATEGORY="UICTContentSizeCategoryAccessibilityXXXL" \
+          xcodebuild test \
+            -project Locally.xcodeproj \
+            -scheme LocallyScreenshots \
+            -destination "id=$udid" \
+            -only-testing:LocallyUITests/ScreenshotTests/testA_mainScreens \
+            -resultBundlePath ShotsXXXL.xcresult \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -quiet \
+            2>&1 | tee shots-xxxl.log || true
+      - name: Run hosted preview screenshots at XXXL (light)
+        run: |
+          set -o pipefail
+          CONTENT_SIZE_CATEGORY="UICTContentSizeCategoryAccessibilityXXXL" \
+          xcodebuild test \
+            -project Locally.xcodeproj \
+            -scheme Locally \
+            -destination "id=$udid" \
+            -only-testing:LocallyTests/ScreenshotPreviewTests/testPreviewHome \
+            -only-testing:LocallyTests/ScreenshotPreviewTests/testPreviewModels \
+            -resultBundlePath PreviewXXXL.xcresult \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -quiet 2>&1 | tee preview-xxxl.log || true
+      - name: Collect PNGs
+        if: always()
+        run: |
+          mkdir -p artifact
+          for f in shots/light/*.png; do [ -e "$f" ] && cp "$f" "artifact/$(basename "${f%.png}")-light.png"; done
+          for f in shots/dark/*.png; do [ -e "$f" ] && cp "$f" "artifact/$(basename "${f%.png}")-dark.png"; done
+          for f in shots/xxxl/0[12]*.png; do [ -e "$f" ] && cp "$f" "artifact/$(basename "${f%.png}")-xxxl.png"; done
+          # Fallback: pull PNGs out of the xcresult attachments when the
+          # app-side directory write produced nothing.
+          for mode in Light Dark XXXL; do
+            if [ -d "Shots${mode}.xcresult" ]; then
+              mkdir -p "attach-$mode"
+              xcrun xcresulttool export attachments --path "Shots${mode}.xcresult" \
+                --output-path "attach-$mode" 2>/dev/null || true
+              find "attach-$mode" -name '*.png' | while read -r p; do
+                base=$(basename "$p")
+                cp "$p" "artifact/${base%.png}-${mode,,}.png" 2>/dev/null || true
+              done
+            fi
+          done
+          # Hosted preview screenshots (attachments only — they render real
+          # app views from inside the app process).
+          for mode in Light Dark XXXL; do
+            if [ -d "Preview${mode}.xcresult" ]; then
+              mkdir -p "attach-preview-$mode"
+              xcrun xcresulttool export attachments --path "Preview${mode}.xcresult" \
+                --output-path "attach-preview-$mode" 2>/dev/null || true
+              find "attach-preview-$mode" -name '*.png' | while read -r p; do
+                base=$(basename "$p")
+                cp "$p" "artifact/${base%.png}-preview-${mode,,}.png" 2>/dev/null || true
+              done
+            fi
+          done
+          ls -la artifact/ || true
+      - name: Upload screenshots artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: artifact/
+          if-no-files-found: warn
+      - name: Surface errors on failure
+        if: failure()
+        run: |
+          {
+            echo "### screenshots job errors"
+            echo '```'
+            grep -E "error:|failed" shots-*.log 2>/dev/null | sort -u | head -60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
